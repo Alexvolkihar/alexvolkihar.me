@@ -1,13 +1,21 @@
 // @ts-check
-/* eslint perfectionist/sort-objects: "error" */
 import antfu from '@antfu/eslint-config'
 
-export default antfu(
+const cfg = antfu(
   {
     formatters: true,
     pnpm: true,
   },
-).removeRules(
+).setDefaultIgnores((ignores) => [
+  ...ignores,
+  '**/_bmad/**',
+  '**/.specify/**',
+  '**/.github/agents/bmad-*.agent.md',
+  '**/.github/agents/speckit*.agent.md',
+  '**/.github/prompts/speckit*.prompt.md',
+  '**/.agent/**',
+  '**/.agents/**',
+]).removeRules(
   'no-labels',
   'no-lone-blocks',
   'no-restricted-syntax',
@@ -25,3 +33,36 @@ export default antfu(
   'markdown/heading-increment',
   'markdown/require-alt-text',
 )
+
+const _out = cfg.toConfigs()
+const configs = Array.isArray(_out)
+  ? _out.map((c) => ({
+      ...c,
+      ignores: [
+        ...(c.ignores || []),
+        '**/_bmad/**',
+        '**/.specify/**',
+        '**/.github/agents/bmad-*.agent.md',
+        '**/.github/agents/speckit*.agent.md',
+        '**/.github/prompts/speckit*.prompt.md',
+        '**/.agent/**',
+        '**/.agents/**',
+      ],
+    }))
+  : [
+      {
+        ...(_out || {}),
+        ignores: [
+          ...((_out && _out.ignores) || []),
+          '**/_bmad/**',
+          '**/.specify/**',
+          '**/.github/agents/bmad-*.agent.md',
+          '**/.github/agents/speckit*.agent.md',
+          '**/.github/prompts/speckit*.prompt.md',
+          '**/.agent/**',
+          '**/.agents/**',
+        ],
+      },
+    ]
+
+export default configs
