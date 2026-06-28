@@ -1,5 +1,5 @@
-/rss https://antfu.me/feed.xml 301
-/blog https://antfu.me/posts 301
+/rss https://alexvolkihar.ovh/feed.xml 301
+/blog https://alexvolkihar.ovh/posts 301
 
 /github https://github.com/antfu 301
 /gh https://github.com/antfu 301
@@ -136,4 +136,3 @@
 /qrcode-toolkit	https://github.com/antfu/qrcode-toolkit	302
 /raycast-multi-translate	https://github.com/antfu/raycast-multi-translate	302
 /reactivue	https://github.com/antfu/reactivue	302
-/refined-github-last-read	https://github.com/antfu/refined-github-last-read	302
