@@ -1,11 +1,11 @@
 ---
-title: Anthony Fu
-description: Anthony Fu's Portfolio
+title: Alexis Mabanza
+description: Alexis Mabanza's Portfolio
 image: https://antfu.me/og.png
 art: random
 ---
 
-Hey! I'm Anthony Fu, a fanatical open sourceror and design engineer.
+Hey! I'm Alexis Mabanza, a fanatical open sourceror and design engineer.
 
 Working at {Vercel} / {Nuxt}<br>
 Creator of {Vitest} {Slidev} {VueUse} {UnoCSS} {Elk} {Type Challenges}<br>
