@@ -162,7 +162,7 @@ graph TD
 
 #### 1. Le Domaine (Domain)
 C'est le cœur de l'hexagone. Il contient les **Entités**, les **Value Objects** et les **Domain Services**.
-- Il définit la logique métier pure (par exemple: un utilisateur doit avoir un email valide, son mot de passe doit respecter certains critères, etc.).
+- Il définit la logique métier pure (par exemple : un utilisateur doit avoir un email valide, son mot de passe doit respecter certains critères, etc.).
 - Il n'a **aucune dépendance externe**. Il ne connaît ni le framework, ni la base de données, ni PHPMailer, ni même le protocole HTTP. C'est du code PHP natif pur (Plain Old PHP Objects - POPO).
 
 #### 2. L'Application (Cas d'Utilisation / Use Cases)
