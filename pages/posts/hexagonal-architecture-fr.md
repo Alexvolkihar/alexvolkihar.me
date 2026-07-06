@@ -732,12 +732,403 @@ class RegisterUserCommand extends Command
 
 ---
 
-## 6. Conclusion et Comparatif
+## 6. Mise en Pratique : Arborescence et Câblage
+
+Pour mettre en place l'architecture hexagonale dans un projet concret, il est crucial de définir une structure de répertoires claire et d'apprendre au conteneur d'injection de dépendances (Dependency Injection / DI) comment lier nos ports (interfaces) à nos adaptateurs (implémentations concrètes).
+
+### Structure des Dossiers (Arborescence)
+
+Voici l'arborescence recommandée pour organiser les couches de notre hexagone au sein du dossier `src/` d'une application PHP moderne :
+
+```text
+src/
+├── Domain/
+│   ├── Entity/
+│   │   └── User.php
+│   ├── ValueObject/
+│   │   └── Email.php (optionnel)
+│   ├── Exception/
+│   │   ├── InvalidEmailException.php
+│   │   └── WeakPasswordException.php
+│   ├── Repository/         <-- Ports Sortants (Driven Ports)
+│   │   └── UserRepositoryInterface.php
+│   └── Gateway/            <-- Ports Sortants pour services tiers
+│       └── MailerInterface.php
+├── Application/
+│   ├── UseCase/            <-- Cas d'utilisation de l'hexagone
+│   │   └── RegisterUser.php
+│   └── DTO/                <-- Data Transfer Objects
+│       ├── RegisterUserRequest.php
+│       └── RegisterUserResponse.php
+└── Infrastructure/
+    ├── Adapter/            <-- Adaptateurs concrets
+    │   ├── Http/           <-- Entrants (Driving) : Contrôleurs
+    │   │   └── RegisterUserController.php
+    │   ├── Cli/            <-- Entrants (Driving) : Commandes Console
+    │   │   └── RegisterUserCommand.php
+    │   ├── Persistence/    <-- Sortants (Driven) : ORM, SQL, In-Memory
+    │   │   ├── SqlUserRepository.php
+    │   │   └── InMemoryUserRepository.php
+    │   └── Mailer/         <-- Sortants (Driven) : SMTP, Brevo, etc.
+    │       └── SmtpMailer.php
+    └── Share/              <-- Utilitaires et code transverse partagé
+```
+
+Cette structure garantit une séparation visuelle et physique immédiate. Un développeur ouvrant le projet peut immédiatement distinguer les règles métier (le Domaine) de l'orchestration des flux (l'Application) et des détails d'implémentation technologiques (l'Infrastructure).
+
+### Câblage des Dépendances (Wiring)
+
+Le cœur de l'application (l'hexagone) n'a pas le droit d'instancier directement des classes de l'Infrastructure. Il dépend d'interfaces. C'est le rôle du framework et de son conteneur d'injection de dépendances de résoudre ces abstractions au moment de l'exécution (Runtime).
+
+Voici comment configurer ce câblage dans les deux frameworks PHP les plus populaires.
+
+#### Option A : Configuration dans Symfony (`services.yaml`)
+
+Dans Symfony, le système d'autowiring gère automatiquement la majorité des injections si le nom de la classe correspond au type attendu. Pour injecter un adaptateur spécifique lorsqu'une interface est demandée, nous configurons des liaisons explicites dans `config/services.yaml` :
+
+```yaml
+# config/services.yaml
+services:
+    # Configuration par défaut
+    _defaults:
+        autowire: true      # Active l'injection automatique
+        autoconfigure: true # Enregistre automatiquement les commandes CLI, contrôleurs, etc.
+
+    # Rendre disponible notre cœur applicatif et nos adaptateurs
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/Domain/Entity/'
+            - '../src/Domain/ValueObject/'
+            - '../src/Domain/Exception/'
+            - '../src/Application/DTO/'
+
+    # Liaison explicite des ports (interfaces) aux adaptateurs (implémentations)
+    App\Domain\Repository\UserRepositoryInterface:
+        class: App\Infrastructure\Adapter\Persistence\SqlUserRepository
+
+    App\Domain\Gateway\MailerInterface:
+        class: App\Infrastructure\Adapter\Mailer\SmtpMailer
+```
+
+#### Option B : Configuration dans Laravel (`AppServiceProvider`)
+
+Dans Laravel, la liaison des interfaces aux implémentations se fait directement en PHP via les Service Providers, généralement dans la méthode `register` du `AppServiceProvider` :
+
+```php
+<?php
+
+namespace App\Providers;
+
+use Illuminate\Support\ServiceProvider;
+use App\Domain\Repository\UserRepositoryInterface;
+use App\Infrastructure\Adapter\Persistence\SqlUserRepository;
+use App\Domain\Gateway\MailerInterface;
+use App\Infrastructure\Adapter\Mailer\SmtpMailer;
+
+class AppServiceProvider extends ServiceProvider
+{
+    /**
+     * Enregistre les liaisons dans le conteneur.
+     */
+    public function register(): void
+    {
+        // Liaison des interfaces (Ports) aux classes concrètes (Adaptateurs)
+        $this->app->bind(UserRepositoryInterface::class, SqlUserRepository::class);
+        $this->app->bind(MailerInterface::class, SmtpMailer::class);
+    }
+}
+```
+
+---
+
+## 7. Maîtriser l'Architecture Hexagonale (Concepts Avancés)
+
+Une fois les fondations posées, l'architecture hexagonale libère tout son potentiel à travers des pratiques avancées permettant de maximiser la qualité du code, de réduire le temps d'exécution des tests et de garantir l'intégrité de l'architecture sur le long terme.
+
+### La Stratégie de Test Ultime (The Ultimate Testing Strategy)
+
+L'un des plus grands avantages d'avoir découplé le cœur métier de l'infrastructure est la possibilité de tester les cas d'utilisation (Use Cases) de manière purement unitaire, sans aucune dépendance réseau, système de fichiers ou base de données.
+
+Plutôt que d'utiliser des outils de mock complexes (qui rendent les tests verbeux et fragiles face aux refactorisations internes), nous pouvons implémenter une version en mémoire de nos ports.
+
+#### 1. L'implémentation en mémoire : `InMemoryUserRepository`
+
+Cet adaptateur de test conserve les entités en mémoire dans un simple tableau PHP. Il reproduit fidèlement le comportement d'une base de données sans en subir la lenteur ou les contraintes de configuration.
+
+```php
+<?php
+
+namespace App\Infrastructure\Adapter\Persistence;
+
+use App\Domain\Entity\User;
+use App\Domain\Repository\UserRepositoryInterface;
+
+class InMemoryUserRepository implements UserRepositoryInterface
+{
+    /**
+     * @var array<string, User>
+     */
+    private array $users = [];
+
+    public function save(User $user): void
+    {
+        $this->users[$user->getId()] = $user;
+    }
+
+    public function findByEmail(string $email): ?User
+    {
+        foreach ($this->users as $user) {
+            if ($user->getEmail() === $email) {
+                return $user;
+            }
+        }
+        return null;
+    }
+
+    public function existsByUsername(string $username): bool
+    {
+        foreach ($this->users as $user) {
+            if ($user->getUsername() === $username) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
+```
+
+Pour le mailer, nous pouvons faire de même en créant un `InMemoryMailer` qui enregistre les notifications envoyées pour vérification ultérieure :
+
+```php
+<?php
+
+namespace App\Infrastructure\Adapter\Mailer;
+
+use App\Domain\Entity\User;
+use App\Domain\Gateway\MailerInterface;
+
+class InMemoryMailer implements MailerInterface
+{
+    /**
+     * @var array<int, User>
+     */
+    private array $sentEmails = [];
+
+    public function sendWelcomeEmail(User $user): void
+    {
+        $this->sentEmails[] = $user;
+    }
+
+    public function hasSentWelcomeEmailTo(string $email): bool
+    {
+        foreach ($this->sentEmails as $user) {
+            if ($user->getEmail() === $email) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
+```
+
+#### 2. Le Test PHPUnit : `RegisterUserTest`
+
+Nous pouvons maintenant écrire un test unitaire pur. Il s'exécute en une fraction de milliseconde, ne nécessite aucune base de données de test et ne lèvera jamais d'erreur en cas de serveur SMTP indisponible.
+
+```php
+<?php
+
+namespace App\Tests\Application\UseCase;
+
+use App\Application\DTO\RegisterUserRequest;
+use App\Application\UseCase\RegisterUser;
+use App\Domain\Exception\InvalidEmailException;
+use App\Infrastructure\Adapter\Persistence\InMemoryUserRepository;
+use App\Infrastructure\Adapter\Mailer\InMemoryMailer;
+use PHPUnit\Framework\TestCase;
+
+class RegisterUserTest extends TestCase
+{
+    private InMemoryUserRepository $userRepository;
+    private InMemoryMailer $mailer;
+    private RegisterUser $useCase;
+
+    protected function setUp(): void
+    {
+        $this->userRepository = new InMemoryUserRepository();
+        $this->mailer = new InMemoryMailer();
+        
+        // Instanciation directe du cas d'utilisation avec nos adaptateurs en mémoire
+        $this->useCase = new RegisterUser($this->userRepository, $this->mailer);
+    }
+
+    public function testUserRegistrationSuccess(): void
+    {
+        // Given
+        $request = new RegisterUserRequest(
+            username: 'alexdev',
+            email: 'alex@example.com',
+            password: 'SuperSecurePassword123'
+        );
+
+        // When
+        $response = $this->useCase->execute($request);
+
+        // Then
+        $this->assertNotEmpty($response->id);
+        $this->assertEquals('alexdev', $response->username);
+        $this->assertEquals('alex@example.com', $response->email);
+
+        // Vérification de la persistance en mémoire
+        $savedUser = $this->userRepository->findByEmail('alex@example.com');
+        $this->assertNotNull($savedUser);
+        $this->assertEquals('alexdev', $savedUser->getUsername());
+
+        // Vérification de l'envoi d'email
+        $this->assertTrue($this->mailer->hasSentWelcomeEmailTo('alex@example.com'));
+    }
+
+    public function testRegistrationFailsWithInvalidEmail(): void
+    {
+        // Given
+        $request = new RegisterUserRequest(
+            username: 'alexdev',
+            email: 'invalid-email',
+            password: 'SuperSecurePassword123'
+        );
+
+        // Then
+        $this->expectException(InvalidEmailException::class);
+
+        // When
+        $this->useCase->execute($request);
+    }
+
+    public function testRegistrationFailsWithDuplicateEmail(): void
+    {
+        // Given - Enregistrement d'un utilisateur existant avec cet email
+        $existingUser = new \App\Domain\Entity\User(
+            'existing-uuid',
+            'johndoe',
+            'john@example.com',
+            'Password12345'
+        );
+        $this->userRepository->save($existingUser);
+
+        // Demande d'inscription avec le même email
+        $request = new RegisterUserRequest(
+            username: 'newuser',
+            email: 'john@example.com',
+            password: 'SuperSecurePassword123'
+        );
+
+        // Then - Attente de l'exception de doublon d'email
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage("Cette adresse email est déjà enregistrée.");
+
+        // When
+        $this->useCase->execute($request);
+    }
+}
+```
+
+> [!TIP]
+> **Vitesse d'exécution :** Ces tests s'exécutent en moins de 2 millisecondes chacun. Dans un grand projet contenant des centaines de règles métier, vous pouvez faire tourner des milliers de tests unitaires en moins de 3 secondes, favorisant une boucle de feedback ultra-rapide et l'adoption sereine du TDD (Test-Driven Development) sans les contraintes d'une base de données.
+
+---
+
+### Contrôler l'Architecture avec Deptrac
+
+L'architecture hexagonale repose sur une règle absolue : **les couches internes ne doivent jamais dépendre des couches externes**. Cependant, face aux pressions de livraison et à l'inattention, un développeur peut facilement introduire un import interdit (par exemple, importer un contrôleur HTTP ou une classe Doctrine directement dans le Domaine).
+
+Pour empêcher ces dérives, on utilise un outil d'analyse statique de dépendances appelé **Deptrac**. Il permet de définir des règles architecturales strictes et de faire échouer la CI en cas de violation.
+
+Voici un exemple de fichier `deptrac.yaml` pour notre structure :
+
+```yaml
+# deptrac.yaml
+deptrac:
+  paths:
+    - src/
+  layers:
+    - name: Domain
+      collectors:
+        - type: directory
+          value: src/Domain/.*
+    - name: Application
+      collectors:
+        - type: directory
+          value: src/Application/.*
+    - name: Infrastructure
+      collectors:
+        - type: directory
+          value: src/Infrastructure/.*
+  ruleset:
+    Domain:
+      # Le Domaine est totalement isolé : il ne dépend de rien d'autre
+      - ~
+    Application:
+      # L'Application ne peut dépendre que du Domaine
+      - Domain
+    Infrastructure:
+      # L'Infrastructure peut dépendre de l'Application et du Domaine
+      - Application
+      - Domain
+```
+
+En lançant la commande `vendor/bin/deptrac`, l'outil scanne tout votre code et lève une erreur bloquante si une dépendance pointe dans la mauvaise direction.
+
+---
+
+### Liens avec le Domain-Driven Design (DDD) et CQRS
+
+L'Architecture Hexagonale est souvent associée à d'autres approches architecturales et méthodologies logicielles :
+
+#### 1. Domain-Driven Design (DDD)
+Bien que l'architecture hexagonale puisse être utilisée sans DDD, elle en est le réceptacle idéal. Le DDD met l'accent sur la modélisation rigoureuse de la logique métier. L'hexagone fournit l'écrin technique protecteur pour cette modélisation. Les concepts DDD d'**Entités**, de **Value Objects**, d'**Agrégats** et de **Services de Domaine** s'intègrent naturellement à l'intérieur du Domaine de l'hexagone, tandis que les **Repositories** DDD correspondent exactement aux ports sortants.
+
+#### 2. CQRS (Command Query Responsibility Segregation)
+Le pattern CQRS sépare les opérations de lecture (Queries) et d'écriture (Commands) pour optimiser les performances et la clarté du code. 
+Dans un hexagone :
+- **Le chemin d'écriture (Command)** passe par les Use Cases de l'Application, manipule les entités du Domaine et persiste l'état via les ports de persistance.
+- **Le chemin de lecture (Query)** peut parfois contourner l'hexagone de manière pragmatique. Étant donné que la lecture n'exécute pas de règles métier complexes mais se contente de projeter des données, un adaptateur entrant (ex: contrôleur) peut appeler un service de requête optimisé pour obtenir directement des DTOs de vue en une seule requête SQL performante, évitant ainsi le coût de reconstruction d'entités métier complexes.
+
+---
+
+### Compromis : Quand l'adopter et quand l'éviter ?
+
+Aucune architecture n'est une solution miracle ("no silver bullet"). L'architecture hexagonale apporte de grands bénéfices mais introduit également une complexité accidentelle indéniable.
+
+#### Avantages
+* **Testabilité maximale** : Tests unitaires ultra-rapides et sans effets de bord.
+* **Indépendance technologique** : Facilité de mise à jour ou de remplacement de l'infrastructure (framework, base de données, services tiers).
+* **Code métier protégé** : Clarté absolue de la logique métier, nettoyée des détails techniques.
+* **Parallélisation du travail** : Une équipe peut travailler sur les Use Cases tandis qu'une autre développe les adaptateurs concrets de l'Infrastructure.
+
+#### Inconvénients
+* **Verbosité et surcoût de fichiers** : Multiplication des classes, interfaces, DTOs et mappings.
+* **Courbe d'apprentissage** : Nécessite une bonne compréhension de l'inversion de dépendance et de la séparation des couches.
+* **Le coût de l'indirection** : Naviguer dans le code demande de passer par des interfaces avant d'atteindre les implémentations concrètes.
+
+#### Quand l'utiliser ?
+* Projets de taille moyenne à grande ayant une logique métier riche, complexe et évolutive.
+* Applications conçues pour durer plusieurs années (où le framework ou les bases de données changeront probablement de version ou de technologie).
+* Systèmes nécessitant des stratégies de tests automatisés poussées.
+
+#### Quand l'éviter ?
+* **Applications purement CRUD** : Si votre application ne fait que lire et écrire dans une base de données sans appliquer de règles métier complexes, l'architecture hexagonale sera une usine à gaz inutile. Utilisez un framework classique avec son ORM natif (ex: Laravel Eloquent actif).
+* **Microservices ultra-spécialisés** : Pour un petit microservice de quelques endpoints qui fait office de passerelle ou de passe-plat technique.
+* **Prototypes et MVP jetables** : Privilégiez la vitesse de mise sur le marché avec des couplages directs, quitte à refactoriser en hexagone une fois le modèle économique validé.
+
+---
+
+## Conclusion et Comparatif
 
 En isolant le cœur de l'application (le Domaine et les Use Cases) des détails techniques via des interfaces (les Ports), nous avons obtenu :
-1. **Un code hautement testable** : Nous pouvons désormais écrire des tests unitaires très rapides en mockant simplement `UserRepositoryInterface` et `MailerInterface`, ou en fournissant une implémentation `InMemoryUserRepository` ultra-simple.
+1. **Un code hautement testable** : Nous pouvons désormais écrire des tests unitaires très rapides en fournissant une implémentation `InMemoryUserRepository` ultra-simple, sans avoir à configurer de mocks ou de bases de données réelles.
 2. **Une indépendance technologique** : Changer d'ORM (Eloquent vers Doctrine) ou de service d'email (SMTP vers Mailgun) ne demande aucune modification du code métier dans `RegisterUser` ou `User`. Seuls de nouveaux adaptateurs doivent être écrits dans la couche Infrastructure.
-3. **Une flexibilité accrue** : HTTP et CLI partagent exactement le même contrôleur de scénario applicatif.
+3. **Une flexibilité accrue** : HTTP et CLI partagent exactement le même cas d'utilisation applicatif.
 
 L'Architecture Hexagonale demande plus de fichiers et une rigueur supérieure de découplage au départ, mais elle garantit la pérennité de votre logique métier face à l'obsolescence et à l'évolution des infrastructures technologiques.
 
