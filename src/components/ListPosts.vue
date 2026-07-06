@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Post } from '~/types'
 import { useRouter } from 'vue-router/auto'
-import { englishOnly, formatDate } from '~/logics'
+import { englishOnly, formatDate, normalizeDateInput, showFrenchPosts, showJapanesePosts } from '~/logics'
 
 const props = defineProps<{
   type?: string
@@ -27,12 +27,20 @@ const routes: Post[] = router.getRoutes()
 
 const posts = computed(() =>
   [...(props.posts || routes), ...props.extra || []]
-    .sort((a, b) => +new Date(b.date) - +new Date(a.date))
-    .filter(i => !englishOnly.value || !i.lang || i.lang === 'en'),
+    .sort((a, b) => +new Date(normalizeDateInput(b.date)) - +new Date(normalizeDateInput(a.date)))
+    .filter((i) => {
+      if (englishOnly.value)
+        return !i.lang || i.lang === 'en'
+      if (i.lang === 'fr' && !showFrenchPosts.value)
+        return false
+      if (i.lang === 'ja' && !showJapanesePosts.value)
+        return false
+      return true
+    }),
 )
 
-const getYear = (a: Date | string | number) => new Date(a).getFullYear()
-const isFuture = (a?: Date | string | number) => a && new Date(a) > new Date()
+const getYear = (a: Date | string | number) => new Date(normalizeDateInput(a)).getFullYear()
+const isFuture = (a?: Date | string | number) => a && new Date(normalizeDateInput(a)) > new Date()
 const isSameYear = (a?: Date | string | number, b?: Date | string | number) => a && b && getYear(a) === getYear(b)
 function isSameGroup(a: Post, b?: Post) {
   return (isFuture(a.date) === isFuture(b?.date)) && isSameYear(a.date, b?.date)
@@ -42,6 +50,29 @@ function getGroupName(p: Post) {
   if (isFuture(p.date))
     return 'Upcoming'
   return getYear(p.date)
+}
+
+function toggleLanguageFilter(lang?: string) {
+  if (lang === 'fr') {
+    showFrenchPosts.value = !showFrenchPosts.value
+    englishOnly.value = false
+  }
+  else if (lang === 'ja') {
+    showJapanesePosts.value = !showJapanesePosts.value
+    englishOnly.value = false
+  }
+}
+
+function getLanguageTagClass(lang?: string) {
+  const active = lang === 'fr'
+    ? showFrenchPosts.value
+    : lang === 'ja'
+      ? showJapanesePosts.value
+      : true
+
+  return active
+    ? 'bg-zinc:15 text-zinc5'
+    : 'bg-zinc:8 text-zinc4 op60'
 }
 </script>
 
@@ -91,11 +122,25 @@ function getGroupName(p: Post) {
                 align-middle flex-none
                 class="text-xs bg-zinc:15 text-zinc5 rounded px-1 py-0.5 ml--12 mr2 my-auto hidden md:block"
               >中文</span>
-              <span
+              <button
+                v-if="route.lang === 'fr'"
+                align-middle
+                flex-none
+                class="text-xs rounded px-1 py-0.5 ml--15 mr2 my-auto hidden md:block hover:opacity-100 opacity-90"
+                :class="getLanguageTagClass('fr')"
+                @click.stop.prevent="toggleLanguageFilter('fr')"
+              >
+                Français
+              </button>
+              <button
                 v-if="route.lang === 'ja'"
                 align-middle flex-none
-                class="text-xs bg-zinc:15 text-zinc5 rounded px-1 py-0.5 ml--15 mr2 my-auto hidden md:block"
-              >日本語</span>
+                class="text-xs rounded px-1 py-0.5 ml--15 mr2 my-auto hidden md:block hover:opacity-100 opacity-90"
+                :class="getLanguageTagClass('ja')"
+                @click.stop.prevent="toggleLanguageFilter('ja')"
+              >
+                日本語
+              </button>
               <span align-middle>{{ route.title }}</span>
               <span
                 v-if="route.redirect"
@@ -136,11 +181,25 @@ function getGroupName(p: Post) {
                 align-middle flex-none
                 class="text-xs bg-zinc:15 text-zinc5 rounded px-1 py-0.5 my-auto md:hidden"
               >中文</span>
-              <span
+              <button
+                v-if="route.lang === 'fr'"
+                align-middle
+                flex-none
+                class="text-xs rounded px-1 py-0.5 my-auto md:hidden hover:opacity-100 opacity-90"
+                :class="getLanguageTagClass('fr')"
+                @click.stop.prevent="toggleLanguageFilter('fr')"
+              >
+                Français
+              </button>
+              <button
                 v-if="route.lang === 'ja'"
                 align-middle flex-none
-                class="text-xs bg-zinc:15 text-zinc5 rounded px-1 py-0.5 my-auto md:hidden"
-              >日本語</span>
+                class="text-xs rounded px-1 py-0.5 my-auto md:hidden hover:opacity-100 opacity-90"
+                :class="getLanguageTagClass('ja')"
+                @click.stop.prevent="toggleLanguageFilter('ja')"
+              >
+                日本語
+              </button>
             </div>
           </li>
           <div v-if="route.place" op50 text-sm hidden mt--2 md:block>

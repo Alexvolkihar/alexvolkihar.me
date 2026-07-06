@@ -2,6 +2,8 @@ import dayjs from 'dayjs'
 
 export const isDark = useDark()
 export const englishOnly = useLocalStorage('antfu-english-only', false)
+export const showFrenchPosts = useLocalStorage('antfu-show-french-posts', true)
+export const showJapanesePosts = useLocalStorage('antfu-show-japanese-posts', true)
 export const galleryView = useLocalStorage<'cover' | 'contain'>('antfu-gallery-view', 'cover')
 
 /**
@@ -52,8 +54,16 @@ export function toggleDark(event: MouseEvent) {
     })
 }
 
-export function formatDate(d: string | Date, onlyDate = true) {
-  const date = dayjs(d)
+export function normalizeDateInput(d: string | number | Date) {
+  if (typeof d === 'number' && Number.isInteger(d) && d >= 1000 && d <= 9999)
+    return `${d}-01-01`
+  if (typeof d === 'string' && /^\d{4}$/.test(d.trim()))
+    return `${d.trim()}-01-01`
+  return d
+}
+
+export function formatDate(d: string | number | Date, onlyDate = true) {
+  const date = dayjs(normalizeDateInput(d))
   if (onlyDate || date.year() === dayjs().year())
     return date.format('MMM D')
   return date.format('MMM D, YYYY')

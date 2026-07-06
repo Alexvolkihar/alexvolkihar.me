@@ -18,6 +18,14 @@ const markdown = MarkdownIt({
   linkify: true,
 })
 
+function normalizeDateInput(d: string | number | Date) {
+  if (typeof d === 'number' && Number.isInteger(d) && d >= 1000 && d <= 9999)
+    return `${d}-01-01`
+  if (typeof d === 'string' && /^\d{4}$/.test(d.trim()))
+    return `${d.trim()}-01-01`
+  return d
+}
+
 async function run() {
   await buildBlogRSS()
 }
@@ -55,7 +63,7 @@ async function buildBlogRSS() {
 
           return {
             ...data,
-            date: new Date(data.date),
+            date: new Date(normalizeDateInput(data.date)),
             content: html,
             author: [AUTHOR],
             link: DOMAIN + i.replace(/^pages(.+)\.md$/, '$1'),
@@ -64,7 +72,7 @@ async function buildBlogRSS() {
     ))
     .filter(Boolean)
 
-  posts.sort((a, b) => +new Date(b.date) - +new Date(a.date))
+  posts.sort((a, b) => +new Date(normalizeDateInput(b.date)) - +new Date(normalizeDateInput(a.date)))
 
   await writeFeed('feed', options, posts)
 }
