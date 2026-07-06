@@ -506,7 +506,7 @@ projects:
 #       link: 'https://github.com/antfu/1990-script'
 #       desc: 'Make your GitHub history back to 1990'
 #       icon: 'i-carbon-time'
-# ---
+---
 
 <!-- @layout-full-width -->
 <ListProjects :projects="frontmatter.projects" />

@@ -8,6 +8,8 @@ description: A comprehensive, progressive guide to understanding, implementing, 
 
 > [Version Française](/posts/hexagonal-architecture-fr)
 
+[[toc]]
+
 Software architecture is often relegated to the background during the initial phases of a project. Delivery speed, the use of all-in-one frameworks, and rapid feature development are prioritized. However, as the application grows, maintenance costs soar, regressions multiply, and business code becomes inextricably coupled with technical details such as the database, third-party libraries, or the framework itself.
 
 This is where **Hexagonal Architecture** (also known as *Ports & Adapters*) comes in. Theorized by Alistair Cockburn in 2005, it proposes structuring the application to isolate business logic from infrastructure details.
@@ -221,7 +223,7 @@ class InvalidEmailException extends \DomainException
 {
     public function __construct(string $email)
     {
-        parent::__construct(sprintf('L\'adresse email "%s" n\'est pas valide.', $email));
+        parent::__construct(sprintf('The email address "%s" is not valid.', $email));
     }
 }
 ```
@@ -235,7 +237,7 @@ class WeakPasswordException extends \DomainException
 {
     public function __construct()
     {
-        parent::__construct('Le mot de passe est trop faible. Il doit contenir au moins 8 caractères.');
+        parent::__construct('The password is too weak. It must contain at least 8 characters.');
     }
 }
 ```
@@ -268,7 +270,7 @@ class User
         $this->id = $id;
 
         if (empty(trim($username))) {
-            throw new \DomainException("Le nom d'utilisateur ne peut pas être vide.");
+            throw new \DomainException("Username cannot be empty.");
         }
         $this->username = $username;
 
@@ -439,11 +441,11 @@ class RegisterUser
     {
         // 1. Validation of uniqueness rules (requiring the UserRepository port)
         if ($this->userRepository->existsByUsername($request->username)) {
-            throw new \DomainException("Ce nom d'utilisateur est déjà utilisé.");
+            throw new \DomainException("This username is already taken.");
         }
 
         if ($this->userRepository->findByEmail($request->email) !== null) {
-            throw new \DomainException("Cette adresse email est déjà enregistrée.");
+            throw new \DomainException("This email address is already registered.");
         }
 
         // 2. Generation of a unique identifier (UUID-like)
@@ -580,11 +582,11 @@ class SmtpMailer implements MailerInterface
     public function sendWelcomeEmail(User $user): void
     {
         $email = (new Email())
-            ->from('no-reply@notre-application.com')
+            ->from('no-reply@our-application.com')
             ->to($user->getEmail())
-            ->subject('Bienvenue sur notre application !')
+            ->subject('Welcome to our application!')
             ->html(sprintf(
-                '<h1>Bonjour %s !</h1><p>Merci de vous être inscrit.</p>',
+                '<h1>Hello %s!</h1><p>Thank you for registering.</p>',
                 htmlspecialchars($user->getUsername(), ENT_QUOTES, 'UTF-8')
             ));
 
@@ -626,7 +628,7 @@ class RegisterUserController
         // 1. HTTP request validation
         if (empty($body['username']) || empty($body['email']) || empty($body['password'])) {
             return new Response(400, ['Content-Type' => 'application/json'], json_encode([
-                'error' => 'Les champs username, email et password sont obligatoires.'
+                'error' => 'The username, email, and password fields are required.'
             ]));
         }
 
@@ -643,7 +645,7 @@ class RegisterUserController
 
             // 4. Success response
             return new Response(201, ['Content-Type' => 'application/json'], json_encode([
-                'message' => 'Utilisateur créé avec succès !',
+                'message' => 'User created successfully!',
                 'user' => [
                     'id' => $response->id,
                     'username' => $response->username,
@@ -658,7 +660,7 @@ class RegisterUserController
         } catch (\Throwable $e) {
             // Unforeseen technical exceptions are hidden (HTTP 500)
             return new Response(500, ['Content-Type' => 'application/json'], json_encode([
-                'error' => 'Une erreur interne est survenue.'
+                'error' => 'An internal error occurred.'
             ]));
         }
     }
@@ -683,7 +685,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-#[AsCommand(name: 'app:register-user', description: 'Enregistre un nouvel utilisateur.')]
+#[AsCommand(name: 'app:register-user', description: 'Registers a new user.')]
 class RegisterUserCommand extends Command
 {
     public function __construct(private RegisterUser $registerUserUseCase)
@@ -694,9 +696,9 @@ class RegisterUserCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addArgument('username', InputArgument::REQUIRED, 'Le nom d\'utilisateur')
-            ->addArgument('email', InputArgument::REQUIRED, 'L\'adresse email')
-            ->addArgument('password', InputArgument::REQUIRED, 'Le mot de passe');
+            ->addArgument('username', InputArgument::REQUIRED, 'The username')
+            ->addArgument('email', InputArgument::REQUIRED, 'The email address')
+            ->addArgument('password', InputArgument::REQUIRED, 'The password');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -712,7 +714,7 @@ class RegisterUserCommand extends Command
             $response = $this->registerUserUseCase->execute($useCaseRequest);
 
             $io->success(sprintf(
-                'Utilisateur créé avec succès ! ID : %s, Nom : %s, Email : %s',
+                'User created successfully! ID: %s, Name: %s, Email: %s',
                 $response->id,
                 $response->username,
                 $response->email
@@ -723,7 +725,7 @@ class RegisterUserCommand extends Command
             $io->error($e->getMessage());
             return Command::FAILURE;
         } catch (\Throwable $e) {
-            $io->error('Une erreur inattendue est survenue : ' . $e->getMessage());
+            $io->error('An unexpected error occurred: ' . $e->getMessage());
             return Command::INVALID;
         }
     }
@@ -1025,7 +1027,7 @@ class RegisterUserTest extends TestCase
 
         // Then - Expecting double email exception
         $this->expectException(\DomainException::class);
-        $this->expectExceptionMessage("Cette adresse email est déjà enregistrée.");
+        $this->expectExceptionMessage("This email address is already registered.");
 
         // When
         $this->useCase->execute($request);

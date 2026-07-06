@@ -325,6 +325,20 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/posts/hexagonal-architecture': RouteRecordInfo<
+      '/posts/hexagonal-architecture',
+      '/posts/hexagonal-architecture',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/posts/hexagonal-architecture-fr': RouteRecordInfo<
+      '/posts/hexagonal-architecture-fr',
+      '/posts/hexagonal-architecture-fr',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/posts/icons-in-pure-css': RouteRecordInfo<
       '/posts/icons-in-pure-css',
       '/posts/icons-in-pure-css',
@@ -1035,6 +1049,18 @@ declare module 'vue-router/auto-routes' {
     'pages/posts/hello-tokyo.md': {
       routes:
         | '/posts/hello-tokyo'
+      views:
+        | never
+    }
+    'pages/posts/hexagonal-architecture.md': {
+      routes:
+        | '/posts/hexagonal-architecture'
+      views:
+        | never
+    }
+    'pages/posts/hexagonal-architecture-fr.md': {
+      routes:
+        | '/posts/hexagonal-architecture-fr'
       views:
         | never
     }
