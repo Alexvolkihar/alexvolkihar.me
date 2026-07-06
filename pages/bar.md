@@ -1,5 +1,5 @@
 ---
-title: Chez Anthony
+title: Chez Alexis
 display: ''
 class: 'prose prose-xl no-copyright'
 ---

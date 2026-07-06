@@ -1,6 +1,6 @@
 ---
 title: "SDLCの自動化：修士論文から得た教訓"
-date: 2025-11-26T00:00:00Z
+date: 2026-06-06T00:00:00Z
 lang: ja
 duration: 10min
 description: GitLab CI、Docker Swarm、SonarQubeを使用したソフトウェア開発ライフサイクル（SDLC）の自動化に関する技術的・個人的なレビュー。

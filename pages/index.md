@@ -27,11 +27,11 @@ Outside of programming, I enjoy doing photography and traveling. I post [photos 
 Find me on
 
 <p flex="~ gap-2 wrap" class="mt--2!">
-  <a href="https://github.com/antfu" target="_blank"><span op75 i-simple-icons-github /> GitHub</a>
-  <a href="https://bsky.app/profile/antfu.me" target="_blank"><span op75 i-ri-bluesky-fill /> Bluesky</a>
-  <a href="https://chat.antfu.me" target="_blank"><span op75 i-simple-icons-discord /> Discord Server</a>
+  <a href="https://github.com/alexvolkihar" target="_blank"><span op75 i-simple-icons-github /> GitHub</a>
+  <!-- <a href="https://bsky.app/profile/antfu.me" target="_blank"><span op75 i-ri-bluesky-fill /> Bluesky</a> -->
+  <!-- <a href="https://chat.antfu.me" target="_blank"><span op75 i-simple-icons-discord /> Discord Server</a>
  <a href="https://x.com/antfu7" target="_blank"><span op75 i-ri-twitter-x-fill /> Twitter</a>
-  <a href="https://x.com/antfuzh" target="_blank"><span op75 i-ri-twitter-x-fill /> 中文推</a>
+  <a href="https://x.com/antfuzh" target="_blank"><span op75 i-ri-twitter-x-fill /> 中文推</a> -->
   <a href="https://x.com/antfujp" target="_blank"><span op75 i-ri-twitter-x-fill /> 日本語</a>
 </p>
 

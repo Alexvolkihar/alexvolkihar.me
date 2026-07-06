@@ -1,7 +1,7 @@
 ---
-title: Media Consumption - Anthony Fu
+title: Media Consumption - Alexvolkihar
 display: Media Consumption
-description: Anthony's Media Consumption
+description: Alexvolkihar's Media Consumption
 ---
 
 One's life span is around 29,000 days, or 696,000 hours.

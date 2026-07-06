@@ -1,5 +1,5 @@
 ---
-title: Projects - Anthony Fu
+title: Projects - Alexvolkihar
 display: Projects
 description: List of projects that I am proud of
 wrapperClass: 'text-center'
