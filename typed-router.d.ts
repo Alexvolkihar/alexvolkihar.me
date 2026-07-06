@@ -248,6 +248,27 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/posts/devops-automation-thesis': RouteRecordInfo<
+      '/posts/devops-automation-thesis',
+      '/posts/devops-automation-thesis',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/posts/devops-automation-thesis-fr': RouteRecordInfo<
+      '/posts/devops-automation-thesis-fr',
+      '/posts/devops-automation-thesis-fr',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/posts/devops-automation-thesis-ja': RouteRecordInfo<
+      '/posts/devops-automation-thesis-ja',
+      '/posts/devops-automation-thesis-ja',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/posts/domain-email': RouteRecordInfo<
       '/posts/domain-email',
       '/posts/domain-email',
@@ -948,6 +969,24 @@ declare module 'vue-router/auto-routes' {
     'pages/posts/dev-ssr-on-nuxt.md': {
       routes:
         | '/posts/dev-ssr-on-nuxt'
+      views:
+        | never
+    }
+    'pages/posts/devops-automation-thesis.md': {
+      routes:
+        | '/posts/devops-automation-thesis'
+      views:
+        | never
+    }
+    'pages/posts/devops-automation-thesis-fr.md': {
+      routes:
+        | '/posts/devops-automation-thesis-fr'
+      views:
+        | never
+    }
+    'pages/posts/devops-automation-thesis-ja.md': {
+      routes:
+        | '/posts/devops-automation-thesis-ja'
       views:
         | never
     }
