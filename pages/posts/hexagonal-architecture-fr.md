@@ -196,4 +196,548 @@ Ici, la couche Infrastructure dépend des interfaces (les Ports) définies à l'
 > [!IMPORTANT]
 > C'est l'inversion de dépendance qui garantit la protection du métier. Le Domaine et l'Application définissent les contrats dont ils ont besoin. L'Infrastructure s'y plie en les implémentant. C'est l'extérieur qui dépend de l'intérieur, jamais l'inverse.
 
-Dans la prochaine partie de cet article, nous mettrons en pratique ces concepts en refactorisant notre contrôleur spaghetti en une architecture propre, modulaire et 100% testable.
+Dans cet article, nous allons mettre en pratique ces concepts en refactorisant notre contrôleur spaghetti en une architecture propre, modulaire et 100% testable.
+
+---
+
+## 3. La Pratique : Le Cœur Applicatif (Domaine & Ports)
+
+Pour cette refactorisation, nous allons structurer notre projet de manière à séparer clairement chaque couche de notre hexagone. Commençons par le cœur : le Domaine et ses frontières (les Ports).
+
+### Le Domaine : Isolation absolue de la logique métier
+
+Le Domaine est le centre névralgique de notre application. Il ne contient que du code PHP natif pur (Plain Old PHP Objects), libre de toute dépendance vis-à-vis d'un framework ou d'une base de données. Il garantit que les règles et invariants métier sont toujours respectés.
+
+#### 1. Les Exceptions Métier (Invariants)
+
+Nous commençons par définir des exceptions spécifiques qui modélisent des erreurs fonctionnelles liées aux règles métier.
+
+```php
+<?php
+
+namespace App\Domain\Exception;
+
+class InvalidEmailException extends \DomainException
+{
+    public function __construct(string $email)
+    {
+        parent::__construct(sprintf('L\'adresse email "%s" n\'est pas valide.', $email));
+    }
+}
+```
+
+```php
+<?php
+
+namespace App\Domain\Exception;
+
+class WeakPasswordException extends \DomainException
+{
+    public function __construct()
+    {
+        parent::__construct('Le mot de passe est trop faible. Il doit contenir au moins 8 caractères.');
+    }
+}
+```
+
+#### 2. L'Entité Métier `User`
+
+Cette entité encapsule les invariants de notre concept d'utilisateur : validation de la validité de l'email, de la force du mot de passe, et le hachage sécurisé du mot de passe.
+
+```php
+<?php
+
+namespace App\Domain\Entity;
+
+use App\Domain\Exception\InvalidEmailException;
+use App\Domain\Exception\WeakPasswordException;
+
+class User
+{
+    private string $id;
+    private string $username;
+    private string $email;
+    private string $passwordHash;
+
+    public function __construct(
+        string $id,
+        string $username,
+        string $email,
+        string $plainPassword
+    ) {
+        $this->id = $id;
+
+        if (empty(trim($username))) {
+            throw new \DomainException("Le nom d'utilisateur ne peut pas être vide.");
+        }
+        $this->username = $username;
+
+        $this->setEmail($email);
+        $this->setPassword($plainPassword);
+    }
+
+    public function getId(): string
+    {
+        return $this->id;
+    }
+
+    public function getUsername(): string
+    {
+        return $this->username;
+    }
+
+    public function getEmail(): string
+    {
+        return $this->email;
+    }
+
+    public function getPasswordHash(): string
+    {
+        return $this->passwordHash;
+    }
+
+    private function setEmail(string $email): void
+    {
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new InvalidEmailException($email);
+        }
+        $this->email = $email;
+    }
+
+    private function setPassword(string $plainPassword): void
+    {
+        if (strlen($plainPassword) < 8) {
+            throw new WeakPasswordException();
+        }
+        
+        // Le hachage du mot de passe est une règle de sécurité métier essentielle.
+        $this->passwordHash = password_hash($plainPassword, PASSWORD_BCRYPT);
+    }
+}
+```
+
+---
+
+### Les Ports : Définir les frontières
+
+Les ports sont les contrats (interfaces) définissant comment l'Hexagone communique avec l'extérieur. Le Domaine ou les Use Cases déclarent ces besoins, sans savoir comment ils seront implémentés.
+
+#### 1. Le Port du Dépôt : `UserRepositoryInterface` (Outbound Port)
+
+Ce port définit les besoins de notre hexagone pour la persistance et la recherche des utilisateurs.
+
+```php
+<?php
+
+namespace App\Domain\Repository;
+
+use App\Domain\Entity\User;
+
+interface UserRepositoryInterface
+{
+    public function save(User $user): void;
+    public function findByEmail(string $email): ?User;
+    public function existsByUsername(string $username): bool;
+}
+```
+
+#### 2. Le Port de Notification : `MailerInterface` (Outbound Port)
+
+Ce port définit la capacité de notifier l'utilisateur lors de son inscription.
+
+```php
+<?php
+
+namespace App\Domain\Gateway;
+
+use App\Domain\Entity\User;
+
+interface MailerInterface
+{
+    public function sendWelcomeEmail(User $user): void;
+}
+```
+
+---
+
+## 4. La Couche Application (Cas d'Utilisation & DTOs)
+
+La couche Application coordonne l'exécution des scénarios d'utilisation. Elle dépend uniquement du Domaine et des interfaces (les Ports).
+
+### Les Data Transfer Objects (DTO)
+
+Les DTOs permettent de faire circuler les données de manière structurée et immutable sans coupler l'application aux requêtes HTTP ou aux types natifs du framework.
+
+#### 1. Le DTO de Requête : `RegisterUserRequest`
+
+```php
+<?php
+
+namespace App\Application\DTO;
+
+readonly class RegisterUserRequest
+{
+    public function __construct(
+        public string $username,
+        public string $email,
+        public string $password
+    ) {}
+}
+```
+
+#### 2. Le DTO de Réponse : `RegisterUserResponse`
+
+```php
+<?php
+
+namespace App\Application\DTO;
+
+use App\Domain\Entity\User;
+
+readonly class RegisterUserResponse
+{
+    public function __construct(
+        public string $id,
+        public string $username,
+        public string $email
+    ) {}
+
+    public static function fromEntity(User $user): self
+    {
+        return new self(
+            $user->getId(),
+            $user->getUsername(),
+            $user->getEmail()
+        );
+    }
+}
+```
+
+### Le Service d'Application (Use Case) : `RegisterUser`
+
+Voici la classe qui orchestre la création de l'utilisateur. Remarquez l'injection de dépendances via le constructeur des ports `UserRepositoryInterface` et `MailerInterface`.
+
+```php
+<?php
+
+namespace App\Application\UseCase;
+
+use App\Application\DTO\RegisterUserRequest;
+use App\Application\DTO\RegisterUserResponse;
+use App\Domain\Entity\User;
+use App\Domain\Repository\UserRepositoryInterface;
+use App\Domain\Gateway\MailerInterface;
+
+class RegisterUser
+{
+    public function __construct(
+        private UserRepositoryInterface $userRepository,
+        private MailerInterface $mailer
+    ) {}
+
+    public function execute(RegisterUserRequest $request): RegisterUserResponse
+    {
+        // 1. Validation des règles d'unicité (qui nécessitent le port UserRepository)
+        if ($this->userRepository->existsByUsername($request->username)) {
+            throw new \DomainException("Ce nom d'utilisateur est déjà utilisé.");
+        }
+
+        if ($this->userRepository->findByEmail($request->email) !== null) {
+            throw new \DomainException("Cette adresse email est déjà enregistrée.");
+        }
+
+        // 2. Génération d'un identifiant unique (UUID-like)
+        $id = bin2hex(random_bytes(16));
+
+        // 3. Création de l'entité de Domaine (valide implicitement les invariants)
+        $user = new User(
+            $id,
+            $request->username,
+            $request->email,
+            $request->password
+        );
+
+        // 4. Persistance via le Port
+        $this->userRepository->save($user);
+
+        // 5. Envoi du mail de bienvenue via le Port
+        $this->mailer->sendWelcomeEmail($user);
+
+        // 6. Retour du DTO de réponse
+        return RegisterUserResponse::fromEntity($user);
+    }
+}
+```
+
+> [!NOTE]
+> **Sécurité transactionnelle et effets de bord :** Dans cet exemple simplifié, l'envoi d'email est fait directement à la suite de l'enregistrement en base de données. En production, si l'envoi d'email échoue (panne du serveur SMTP), le cas d'utilisation échouera et renverra une erreur, alors que l'utilisateur aura potentiellement déjà été enregistré en base de données. Pour garantir la cohérence transactionnelle, on utilise généralement des **Événements de Domaine** (Domain Events) combinés au pattern **Outbox** pour déléguer l'envoi d'email de manière asynchrone et fiable.
+
+---
+
+## 5. La Couche Infrastructure (Les Adaptateurs)
+
+L'Infrastructure contient l'implémentation concrète de nos interfaces (les adaptateurs sortants) ainsi que les mécanismes de déclenchement (les adaptateurs entrants).
+
+### Les Adaptateurs Sortants (Outbound Adapters)
+
+Ces classes implémentent les ports sortants en manipulant des détails techniques spécifiques (SQL, SMTP).
+
+#### 1. Persistance SQL : `SqlUserRepository` (via PDO)
+
+```php
+<?php
+
+namespace App\Infrastructure\Adapter\Persistence;
+
+use App\Domain\Entity\User;
+use App\Domain\Repository\UserRepositoryInterface;
+use PDO;
+
+class SqlUserRepository implements UserRepositoryInterface
+{
+    public function __construct(private PDO $pdo)
+    {}
+
+    public function save(User $user): void
+    {
+        $stmt = $this->pdo->prepare('
+            INSERT INTO users (id, username, email, password_hash)
+            VALUES (:id, :username, :email, :password_hash)
+        ');
+
+        $stmt->execute([
+            'id' => $user->getId(),
+            'username' => $user->getUsername(),
+            'email' => $user->getEmail(),
+            'password_hash' => $user->getPasswordHash(),
+        ]);
+    }
+
+    public function findByEmail(string $email): ?User
+    {
+        $stmt = $this->pdo->prepare('SELECT * FROM users WHERE email = :email LIMIT 1');
+        $stmt->execute(['email' => $email]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row) {
+            return null;
+        }
+
+        return $this->reconstituteEntity($row);
+    }
+
+    public function existsByUsername(string $username): bool
+    {
+        $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM users WHERE username = :username');
+        $stmt->execute(['username' => $username]);
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    /**
+     * Reconstitue une entité User à partir des données de la base de données.
+     * Cette méthode permet de contourner le hachage et la validation du mot de passe en clair.
+     */
+    private function reconstituteEntity(array $row): User
+    {
+        $reflection = new \ReflectionClass(User::class);
+        $user = $reflection->newInstanceWithoutConstructor();
+
+        $properties = [
+            'id' => $row['id'],
+            'username' => $row['username'],
+            'email' => $row['email'],
+            'passwordHash' => $row['password_hash'],
+        ];
+
+        foreach ($properties as $name => $value) {
+            $property = $reflection->getProperty($name);
+            $property->setAccessible(true);
+            $property->setValue($user, $value);
+        }
+
+        return $user;
+    }
+}
+```
+
+#### 2. Envoi de Mail : `SmtpMailer` (via Symfony Mailer)
+
+```php
+<?php
+
+namespace App\Infrastructure\Adapter\Mailer;
+
+use App\Domain\Entity\User;
+use App\Domain\Gateway\MailerInterface;
+use Symfony\Component\Mailer\MailerInterface as SymfonyMailerInterface;
+use Symfony\Component\Mime\Email;
+
+class SmtpMailer implements MailerInterface
+{
+    public function __construct(private SymfonyMailerInterface $symfonyMailer)
+    {}
+
+    public function sendWelcomeEmail(User $user): void
+    {
+        $email = (new Email())
+            ->from('no-reply@notre-application.com')
+            ->to($user->getEmail())
+            ->subject('Bienvenue sur notre application !')
+            ->html(sprintf(
+                '<h1>Bonjour %s !</h1><p>Merci de vous être inscrit.</p>',
+                htmlspecialchars($user->getUsername(), ENT_QUOTES, 'UTF-8')
+            ));
+
+        $this->symfonyMailer->send($email);
+    }
+}
+```
+
+---
+
+### Les Adaptateurs Entrants (Inbound Adapters)
+
+Ces classes capturent un stimulus de l'extérieur, valident le format de la requête et invoquent notre cas d'utilisation.
+
+#### 1. Le Contrôleur HTTP : `RegisterUserController`
+
+Ce contrôleur reçoit une requête HTTP, la décode, instancie le DTO et lance l'exécution. En cas de `DomainException`, il renvoie une erreur `422 Unprocessable Entity` avec le message adéquat.
+
+```php
+<?php
+
+namespace App\Infrastructure\Adapter\Http;
+
+use App\Application\DTO\RegisterUserRequest;
+use App\Application\UseCase\RegisterUser;
+use Nyholm\Psr7\Response;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
+
+class RegisterUserController
+{
+    public function __construct(private RegisterUser $registerUserUseCase)
+    {}
+
+    public function __invoke(ServerRequestInterface $request): ResponseInterface
+    {
+        $body = json_decode((string) $request->getBody(), true) ?? [];
+
+        // 1. Validation de la requête HTTP
+        if (empty($body['username']) || empty($body['email']) || empty($body['password'])) {
+            return new Response(400, ['Content-Type' => 'application/json'], json_encode([
+                'error' => 'Les champs username, email et password sont obligatoires.'
+            ]));
+        }
+
+        try {
+            // 2. Création du DTO
+            $useCaseRequest = new RegisterUserRequest(
+                username: $body['username'],
+                email: $body['email'],
+                password: $body['password']
+            );
+
+            // 3. Appel du cas d'utilisation
+            $response = $this->registerUserUseCase->execute($useCaseRequest);
+
+            // 4. Réponse de succès
+            return new Response(201, ['Content-Type' => 'application/json'], json_encode([
+                'message' => 'Utilisateur créé avec succès !',
+                'user' => [
+                    'id' => $response->id,
+                    'username' => $response->username,
+                    'email' => $response->email,
+                ]
+            ]));
+        } catch (\DomainException $e) {
+            // Les exceptions du domaine sont traduites en code statut HTTP 422
+            return new Response(422, ['Content-Type' => 'application/json'], json_encode([
+                'error' => $e->getMessage()
+            ]));
+        } catch (\Throwable $e) {
+            // Les exceptions techniques imprévues sont cachées (HTTP 500)
+            return new Response(500, ['Content-Type' => 'application/json'], json_encode([
+                'error' => 'Une erreur interne est survenue.'
+            ]));
+        }
+    }
+}
+```
+
+#### 2. La Commande de Console CLI : `RegisterUserCommand`
+
+Nous pouvons sans problème brancher un second canal d'entrée (le CLI) sur le même scénario applicatif. Le code métier reste totalement inchangé, démontrant ainsi la flexibilité de notre découplage.
+
+```php
+<?php
+
+namespace App\Infrastructure\Adapter\Cli;
+
+use App\Application\DTO\RegisterUserRequest;
+use App\Application\UseCase\RegisterUser;
+use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Style\SymfonyStyle;
+
+#[AsCommand(name: 'app:register-user', description: 'Enregistre un nouvel utilisateur.')]
+class RegisterUserCommand extends Command
+{
+    public function __construct(private RegisterUser $registerUserUseCase)
+    {
+        parent::__construct();
+    }
+
+    protected function configure(): void
+    {
+        $this
+            ->addArgument('username', InputArgument::REQUIRED, 'Le nom d\'utilisateur')
+            ->addArgument('email', InputArgument::REQUIRED, 'L\'adresse email')
+            ->addArgument('password', InputArgument::REQUIRED, 'Le mot de passe');
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $io = new SymfonyStyle($input, $output);
+
+        $username = $input->getArgument('username');
+        $email = $input->getArgument('email');
+        $password = $input->getArgument('password');
+
+        try {
+            $useCaseRequest = new RegisterUserRequest($username, $email, $password);
+            $response = $this->registerUserUseCase->execute($useCaseRequest);
+
+            $io->success(sprintf(
+                'Utilisateur créé avec succès ! ID : %s, Nom : %s, Email : %s',
+                $response->id,
+                $response->username,
+                $response->email
+            ));
+
+            return Command::SUCCESS;
+        } catch (\DomainException $e) {
+            $io->error($e->getMessage());
+            return Command::FAILURE;
+        } catch (\Throwable $e) {
+            $io->error('Une erreur inattendue est survenue : ' . $e->getMessage());
+            return Command::INVALID;
+        }
+    }
+}
+```
+
+---
+
+## 6. Conclusion et Comparatif
+
+En isolant le cœur de l'application (le Domaine et les Use Cases) des détails techniques via des interfaces (les Ports), nous avons obtenu :
+1. **Un code hautement testable** : Nous pouvons désormais écrire des tests unitaires très rapides en mockant simplement `UserRepositoryInterface` et `MailerInterface`, ou en fournissant une implémentation `InMemoryUserRepository` ultra-simple.
+2. **Une indépendance technologique** : Changer d'ORM (Eloquent vers Doctrine) ou de service d'email (SMTP vers Mailgun) ne demande aucune modification du code métier dans `RegisterUser` ou `User`. Seuls de nouveaux adaptateurs doivent être écrits dans la couche Infrastructure.
+3. **Une flexibilité accrue** : HTTP et CLI partagent exactement le même contrôleur de scénario applicatif.
+
+L'Architecture Hexagonale demande plus de fichiers et une rigueur supérieure de découplage au départ, mais elle garantit la pérennité de votre logique métier face à l'obsolescence et à l'évolution des infrastructures technologiques.
+
