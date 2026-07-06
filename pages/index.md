@@ -5,9 +5,9 @@ image: https://antfu.me/og.png
 art: random
 ---
 
-Hey! I'm Alexis Mabanza, a fanatical open sourceror and design engineer.
+Hey! I'm Alexis Mabanza, a fanatical open sourceror, design & AI augmented software engineer.
 
-Working at Eff'Innov<br>
+Working at Eff'Innov, Normandy , France<br>
 Fan of {Vitest} {Slidev} {VueUse} {UnoCSS} {Elk} {Type Challenges}<br>
 <!-- Core team of {Vue} {Nuxt} {Vite}<br>
 Maintaining {Shiki} {Twoslash} {ESLint Stylistic} -->
