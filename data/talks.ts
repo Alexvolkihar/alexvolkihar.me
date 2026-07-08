@@ -2,6 +2,21 @@ import type { Talk } from '~/types'
 
 export const talks: Talk[] = [
   {
+    title: 'Maîtriser l\'Architecture Hexagonale',
+    description: 'Du Spaghetti au Code Propre en PHP — guide progressif pour comprendre, implémenter et maîtriser l\'architecture hexagonale à travers un cas pratique de réfactoring.',
+    lang: 'fr',
+    presentations: [
+      {
+        lang: 'fr',
+        date: '2026-07-06',
+        conference: 'Blog Article',
+        conferenceUrl: 'https://alexvolkihar.ovh',
+        transcript: '/posts/hexagonal-architecture-fr',
+        spa: 'https://slides.alexvolkihar.ovh/2026/hexagonal-architecture/',
+      },
+    ],
+  },
+  {
     title: 'Introducing Vite DevTools',
     description: 'Introduction to Vite DevTools',
     presentations: [
