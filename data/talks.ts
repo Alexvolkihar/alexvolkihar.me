@@ -16,6 +16,7 @@ export const talks: Talk[] = [
       },
     ],
   },
+  /* Anthony Fu's talks, kept for reference but hidden from this fork's Talks page.
   {
     title: 'Introducing Vite DevTools',
     description: 'Introduction to Vite DevTools',
@@ -450,6 +451,7 @@ export const talks: Talk[] = [
       },
     ],
   },
+  */
 ]
 
 talks.forEach((talk) => {
