@@ -10,7 +10,7 @@ export const talks: Talk[] = [
         lang: 'fr',
         date: '2026-07-06',
         conference: 'Blog Article',
-        conferenceUrl: 'https://alexvolkihar.ovh',
+        conferenceUrl: 'https://alexvolkihar.ovh/posts/hexagonal-architecture-fr',
         transcript: '/posts/hexagonal-architecture-fr',
         spa: 'https://slides.alexvolkihar.ovh/2026/hexagonal-architecture/',
       },
