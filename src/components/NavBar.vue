@@ -30,6 +30,9 @@ const { y: scroll } = useWindowScroll()
     <nav class="nav">
       <div class="spacer" />
       <div class="right" print:op0>
+        <RouterLink to="/" title="Home">
+          <img src="/avatar.png" alt="Alexis Mabanza" w-7 h-7 rounded-full object-cover>
+        </RouterLink>
         <RouterLink to="/posts" title="Blog">
           <span class="lt-md:hidden">Blog</span>
           <div i-ri-article-line md:hidden />
