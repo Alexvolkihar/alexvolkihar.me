@@ -8,6 +8,10 @@ description: A comprehensive, progressive guide to understanding, implementing, 
 
 > [Version Française](/posts/hexagonal-architecture-fr)
 
+> Slides: [SPA](https://hexagonal.slides.alexvolkihar.ovh) (French only)
+>
+> Made with <Slidev class="inline"/> [**Slidev**](https://github.com/slidevjs/slidev) - presentation slides for developers.
+
 [[toc]]
 
 Software architecture is often relegated to the background during the initial phases of a project. Delivery speed, the use of all-in-one frameworks, and rapid feature development are prioritized. However, as the application grows, maintenance costs soar, regressions multiply, and business code becomes inextricably coupled with technical details such as the database, third-party libraries, or the framework itself.

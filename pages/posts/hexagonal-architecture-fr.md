@@ -8,6 +8,10 @@ description: Un guide complet et progressif pour comprendre, implémenter et ma�
 
 > [English Version](/posts/hexagonal-architecture)
 
+> Diaporama : [SPA](https://hexagonal.slides.alexvolkihar.ovh)
+>
+> Réalisé avec <Slidev class="inline"/> [**Slidev**](https://github.com/slidevjs/slidev) - presentation slides for developers.
+
 [[toc]]
 
 L'architecture logicielle est souvent reléguée au second plan lors des phases initiales d'un projet. On privilégie la vitesse de livraison, l'utilisation de frameworks tout-en-un, et le développement rapide de fonctionnalités. Cependant, à mesure que l'application grandit, les coûts de maintenance s'envolent, les régressions se multiplient, et le code métier se retrouve inextricablement couplé aux détails techniques comme la base de données, les bibliothèques tierces, ou le framework lui-même.
