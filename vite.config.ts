@@ -41,6 +41,10 @@ export default defineConfig({
       '@vueuse/core',
       'dayjs',
       'dayjs/plugin/localizedFormat',
+      // mermaid is native ESM so vite-plugin-optimize-exclude would otherwise skip it,
+      // but it pulls in CommonJS deps (e.g. @braintree/sanitize-url) that still need
+      // esbuild's CJS-to-ESM interop from the optimizer to be importable in the browser.
+      'mermaid',
     ],
   },
   plugins: [
@@ -83,6 +87,26 @@ export default defineConfig({
         quotes: '""\'\'',
       },
       async markdownItSetup(md) {
+        const defaultFence = md.renderer.rules.fence
+        md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+          const token = tokens[idx] as any
+          const info = (token.info || '').trim()
+          if (info === 'mermaid') {
+            // Render client-side via Vue component to avoid SSR complications.
+            // JSON.stringify makes this a safe JS string literal, but the result still
+            // needs HTML-attribute escaping: HTML has no backslash-escaping, so a raw
+            // `"` from the diagram content (e.g. `["some label"]`) would otherwise close
+            // the :code="..." attribute early and break the template.
+            const jsExpr = JSON.stringify(token.content)
+              .replace(/&/g, '&amp;')
+              .replace(/"/g, '&quot;')
+            return `<Mermaid :code="${jsExpr}" />`
+          }
+          return defaultFence
+            ? defaultFence(tokens, idx, options, env, self)
+            : self.renderToken(tokens, idx, options)
+        }
+
         md.use(await MarkdownItShiki({
           themes: {
             dark: 'vitesse-dark',
@@ -231,6 +255,21 @@ export default defineConfig({
         if (warning.code !== 'UNUSED_EXTERNAL_IMPORT')
           next(warning)
       },
+    },
+  },
+
+  server: {
+    // Mitigate EMFILE ("too many open files, watch") on macOS.
+    watch: {
+      usePolling: true,
+      interval: 600,
+      ignored: [
+        '**/.git/**',
+        '**/dist/**',
+        '**/temp/**',
+        '**/public/**',
+        '**/node_modules/**',
+      ],
     },
   },
 
