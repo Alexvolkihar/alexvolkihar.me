@@ -18,7 +18,11 @@ You can use the following information to present me:
   <TextCopy>Alexis Mabanza</TextCopy>
 
   <div text-right pr2 op50 font-bold>Avatar</div>
-  <div><a href="https://alexvolkihar.ovh/avatar.png" target="_blank">https://alexvolkihar.ovh/avatar.png</a></div>
+  <div>
+    <a href="https://alexvolkihar.ovh/avatar.png" target="_blank">
+      <img src="/avatar.png" alt="Avatar" w-20 h-20 rounded-full object-cover>
+    </a>
+  </div>
 
   <div text-right pr2 op50 font-bold>Introduction</div>
   <TextCopy>Full-stack developer working hand-in-hand with AI agents — product engineering and automation focused. I build AI-augmented workflows (Cursor, RAG, MCP, Spec-Driven Development, agentic systems) to speed up software delivery and raise the bar on quality. Comfortable with API-first architectures, CI/CD, Docker and modern DevOps environments. Curious and versatile, drawn to agentic AI systems, AI-assisted dev workflows and software automation. Off duty: chasing good shots as a photography enthusiast, lost in video games, or on the guitar.</TextCopy>
