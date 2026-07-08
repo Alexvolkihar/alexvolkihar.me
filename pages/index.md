@@ -50,4 +50,4 @@ Or mail me at <span font-mono>hi<span i-carbon-at/>alexvolkihar.ovh</span>
 
 ---
 
-<SponsorButtons />
+<!-- <SponsorButtons /> -->
