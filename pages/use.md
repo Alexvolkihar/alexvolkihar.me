@@ -10,25 +10,26 @@ art: dots
 
 ## Hardware
 
-- Camera: RICOH GR IIIx / Nikon Z50 + Nikkor 85mm f1.8 / ~~Nikon Z6 II~~ / ~~Nikon D750~~ / ~~Canon 600D~~
-- Laptop: MacBook Pro 16' M1 Max 64GB / MacBook Air 13' M4 / ~~MacBook Air Intel~~ / ~~Dell XPS 15~~
-- Mouse: Logitech MX Ergo S
+- Camera: Nikon D5200 / iPhone 11
+- Laptop: MacBook Pro 13' M1 8GB 256GB SSD / MSI GE63 Raider RGB 8RF (i7-8700HQ, 16GB RAM, 4TB storage, GTX 1070)
+- Mouse: Logitech MX Master 3S
 - Keyboard: HHKB Studio + XPPen Wireless Shortcut Remote
-- Monitor: Studio Display / ~~LG 27UL850-W~~
-- Chair: Herman Miller Aeron / ~~Herman Miller Sayl~~
-- Table: FlexiSpot E7H
-- Speakers: Sonos Beam / HomePod Mini x2 / Sonos Roam 2
+- Monitor: Asus ROG Strix XG27ACS
+- Chair: Herman Miller Aeron
+- Table: FlexiSpot E75 Pro
+- Speakers: Bose Soundlink 3 (SLIII)
+- Headphones : Bose QC35II , Beats Studio 3
+- Earbuds : Bose Quiet Comfort Ultra
 
-### Live Streaming
-
-- Webcam: Studio Display Built-in / DJI Pocket 3
-- Microphone: DJI Mic 2 / ~~Blue Yeti Nano~~
-- Light: Godox LR150 / ~~Elgato Key Light Air~~
+- Webcam: Built-in
+- Microphone: Built-in
+- Light: Xiaomi light bar
 
 ### Gaming
 
-- Steamdeck
-- PS5 + PSVR2
+- Steam Deck LCD 512GB / Steam Deck OLED 1TB
+- PS Vita Henkaku Moded 256gb 
+- NVIDIA GeForce NOW Ultimate
 
 ## Development
 
@@ -42,9 +43,15 @@ art: dots
 - Product Icons: [Carbon Icons](https://github.com/antfu/vscode-icons-carbon)
 - Formatting & Linting: [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) with [`@antfu/eslint-config`](https://github.com/antfu/eslint-config)
 
+### AI
+
+- [Claude Code](https://claude.com/product/claude-code) - AI coding agent in the terminal
+- [GitHub Copilot](https://github.com/features/copilot) - AI pair programmer
+- [Antigravity CLI](https://antigravity.google/product/antigravity-cli) - AI coding agent CLI
+
 ### Browser
 
-Switched to [Brave](https://brave.com/) as Chrome is pushing hard on [Manifest V3](https://www.eff.org/deeplinks/2021/12/chrome-users-beware-manifest-v3-deceitful-and-threatening) without a good solution for Ad blockers.
+Firefox developper edition & Safari
 
 #### Browser Extensions
 
@@ -59,12 +66,17 @@ Switched to [Brave](https://brave.com/) as Chrome is pushing hard on [Manifest V
 
 - [Raycast](https://raycast.com/) - Spotlight replacement
 - [Picture View](https://wl879.github.io/apps/picview/) - Minimalist picture viewer
+- [BoringNotch](https://lo.cafe/notchnook) - Supercharge your Notch
+
 - [Setapp](https://setapp.com/)
-  - [NotchNook](https://lo.cafe/notchnook) - Supercharge your Notch
-  - [Bartender](https://www.macbartender.com/) - Manage your menu bar
-  - [CleanShot X](https://cleanshot.com/) - Screenshot tool
-  - [PixelSnap](https://getpixelsnap.com/) - Screenshot tool
-  - [AlDente](https://apphousekitchen.com/) - Charge limiter
+  - [CleanMyMac] ()
+  - [ClearVPN]()
+  - [Downie](https://apphousekitchen.com/)
+  - [LuminarNeo]
+  - [Permute]
+  - [MindNode]
+  - [ElmediaPlayer]
+
 - [Picsee](https://picsee.chitaner.com/) - File-based photo Management
 - [Kap](https://getkap.co/) - GIF Recorder
 - [MonitorControl](https://github.com/MonitorControl/MonitorControl) - Control the monitor in macOS
