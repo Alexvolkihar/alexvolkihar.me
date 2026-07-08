@@ -8,7 +8,7 @@ description: Un guide complet et progressif pour comprendre, implémenter et ma�
 
 > [English Version](/posts/hexagonal-architecture)
 
-> Diaporama : [SPA](https://hexagonal.slides.alexvolkihar.ovh)
+> Diaporama : [SPA](https://slides.alexvolkihar.ovh/2026/hexagonal-architecture/)
 >
 > Réalisé avec <Slidev class="inline"/> [**Slidev**](https://github.com/slidevjs/slidev) - presentation slides for developers.
 

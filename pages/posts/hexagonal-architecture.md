@@ -8,7 +8,7 @@ description: A comprehensive, progressive guide to understanding, implementing, 
 
 > [Version Française](/posts/hexagonal-architecture-fr)
 
-> Slides: [SPA](https://hexagonal.slides.alexvolkihar.ovh) (French only)
+> Slides: [SPA](https://slides.alexvolkihar.ovh/2026/hexagonal-architecture/) (French only)
 >
 > Made with <Slidev class="inline"/> [**Slidev**](https://github.com/slidevjs/slidev) - presentation slides for developers.
 
