@@ -1,7 +1,18 @@
+export interface PhotoExif {
+  camera: string
+  /** 35mm equivalent, rounded */
+  focalLength?: number
+  fNumber?: number
+  /** As reported by EXIF, e.g. `1/40`, `0.8`, `2` */
+  exposureTime?: string
+  iso?: number
+}
+
 export interface PhotoMate {
   text?: string
   lang?: string
   blurhash?: string
+  exif?: PhotoExif
 }
 
 export interface Photo extends PhotoMate {

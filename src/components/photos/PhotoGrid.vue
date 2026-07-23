@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Photo } from '../../../photos/data'
 import { blurhashToGradientCssObject } from '@unpic/placeholder'
+import { formatExif } from '../../logics/exif'
 
 defineProps<{
   photos: Photo[]
@@ -15,6 +16,7 @@ defineProps<{
         :src="photo.url"
         :alt="photo.text"
         :data-photo-index="idx"
+        :data-exif="formatExif(photo.exif)"
         :style="photo.blurhash && view !== 'contain' ? blurhashToGradientCssObject(photo.blurhash) as any : ''"
         loading="lazy"
         w-full
