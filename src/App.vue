@@ -3,10 +3,12 @@ const route = useRoute()
 
 const imageModel = ref<HTMLImageElement>()
 const imageAlt = ref<string>()
+const imageExif = ref<string>()
 
 function setImageModel(img: HTMLImageElement) {
   imageModel.value = img
   imageAlt.value = img.alt
+  imageExif.value = img.dataset.exif
   const figure = img.closest('figure')
   if (figure) {
     const caption = figure.querySelector('figcaption')
@@ -83,8 +85,13 @@ onKeyStroke('Escape', (e) => {
     <div v-if="imageModel" fixed top-0 left-0 right-0 bottom-0 z-500 backdrop-blur-7 @click="imageModel = undefined">
       <div absolute top-0 left-0 right-0 bottom-0 bg-black:50 z--1 />
       <img :src="imageModel.src" :alt="imageModel.alt" :class="imageModel.className" max-w-screen max-h-screen w-full h-full object-contain>
-      <div v-if="imageAlt" text-white bg-black:50 absolute right-5 bottom-5 px2 py1 flex justify-center items-center>
-        {{ imageAlt }}
+      <div v-if="imageAlt || imageExif" text-white bg-black:50 absolute right-5 bottom-5 px2 py1 flex="~ col gap-1 items-end">
+        <div v-if="imageAlt">
+          {{ imageAlt }}
+        </div>
+        <div v-if="imageExif" text-sm op75>
+          {{ imageExif }}
+        </div>
       </div>
     </div>
   </Transition>
