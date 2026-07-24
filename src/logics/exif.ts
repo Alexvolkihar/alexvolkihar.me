@@ -9,8 +9,11 @@ export function formatExif(exif?: PhotoExif): string | undefined {
     return undefined
 
   const parts = [exif.camera]
-  if (exif.focalLength)
-    parts.push(`${exif.focalLength}mm`)
+  if (exif.focalLength) {
+    parts.push(exif.focalLengthReal
+      ? `${exif.focalLengthReal}mm (${exif.focalLength}mm)`
+      : `${exif.focalLength}mm`)
+  }
   if (exif.fNumber)
     parts.push(`ƒ/${exif.fNumber}`)
   if (exif.exposureTime)

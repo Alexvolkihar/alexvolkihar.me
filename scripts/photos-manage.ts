@@ -31,9 +31,13 @@ function extractExif(tags: ExifReader.Tags): PhotoExif | undefined {
 
   const exif: PhotoExif = { camera }
 
-  const focalLength = exifNumber(tags.FocalLengthIn35mmFilm?.value) ?? exifNumber(tags.FocalLength?.value)
+  const focalLength35mm = exifNumber(tags.FocalLengthIn35mmFilm?.value)
+  const focalLengthReal = exifNumber(tags.FocalLength?.value)
+  const focalLength = focalLength35mm ?? focalLengthReal
   if (focalLength)
     exif.focalLength = Math.round(focalLength)
+  if (focalLengthReal && Math.round(focalLengthReal) !== exif.focalLength)
+    exif.focalLengthReal = Math.round(focalLengthReal)
 
   const fNumber = exifNumber(tags.FNumber?.value)
   if (fNumber)
