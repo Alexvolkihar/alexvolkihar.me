@@ -1,3 +1,4 @@
+import { inject as injectAnalytics } from '@vercel/analytics'
 import dayjs from 'dayjs'
 import LocalizedFormat from 'dayjs/plugin/localizedFormat.js'
 import FloatingVue from 'floating-vue'
@@ -33,6 +34,8 @@ export const createApp = ViteSSG(
     app.use(createPinia())
 
     if (isClient) {
+      injectAnalytics()
+
       const html = document.querySelector('html')!
       setupRouterScroller(router, {
         selectors: {

@@ -16,6 +16,7 @@
   "dependencies": {
     "@unhead/vue": "catalog:frontend",
     "@unocss/reset": "catalog:frontend",
+    "@vercel/analytics": "catalog:frontend",
     "@vueuse/core": "catalog:frontend",
     "d3-hierarchy": "catalog:frontend",
     "d3-shape": "catalog:frontend",
