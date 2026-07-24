@@ -59,6 +59,7 @@ catalogs:
     '@unhead/vue': ^3.1.0
     '@unocss/reset': ^66.7.0
     '@unpic/placeholder': ^0.1.2
+    '@vercel/analytics': ^2.0.1
     '@vueuse/core': ^14.3.0
     d3-hierarchy: ^3.1.2
     d3-shape: ^3.2.0
