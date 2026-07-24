@@ -1,4 +1,5 @@
 import { inject as injectAnalytics } from '@vercel/analytics'
+import { injectSpeedInsights } from '@vercel/speed-insights'
 import dayjs from 'dayjs'
 import LocalizedFormat from 'dayjs/plugin/localizedFormat.js'
 import FloatingVue from 'floating-vue'
@@ -35,6 +36,7 @@ export const createApp = ViteSSG(
 
     if (isClient) {
       injectAnalytics()
+      injectSpeedInsights()
 
       const html = document.querySelector('html')!
       setupRouterScroller(router, {
