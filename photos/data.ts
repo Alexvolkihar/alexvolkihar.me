@@ -2,6 +2,8 @@ export interface PhotoExif {
   camera: string
   /** 35mm equivalent, rounded */
   focalLength?: number
+  /** Actual focal length as reported by the lens, rounded. Only set when it differs from the 35mm equivalent. */
+  focalLengthReal?: number
   fNumber?: number
   /** As reported by EXIF, e.g. `1/40`, `0.8`, `2` */
   exposureTime?: string
