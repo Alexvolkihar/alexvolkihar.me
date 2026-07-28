@@ -201,7 +201,7 @@ export default defineConfig({
               ? fs.copy(`${id.slice(0, -3)}.png`, `public/${path}`)
               : generateOg(frontmatter.title!.replace(/\s-\s.*$/, '').trim(), `public/${path}`),
           )
-          frontmatter.image = `https://antfu.me/${path}`
+          frontmatter.image = `https://alexvolkihar.ovh/${path}`
         })()
         const head = defaults(frontmatter, options)
         return { head, frontmatter }
@@ -286,14 +286,29 @@ async function generateOg(title: string, output: string) {
 
   await fs.mkdir(dirname(output), { recursive: true })
   // breakline every 30 chars
-  const lines = title.trim().split(/(.{0,30})(?:\s|$)/g).filter(Boolean)
+  const lines = title.trim().split(/(.{0,30})(?:\s|$)/g).filter(Boolean).slice(0, 3)
+
+  // Vertically centre the title block, then hang the author name above it
+  const centreY = 400
+  const lineHeight = 76
+  const firstLineY = centreY - ((lines.length - 1) * lineHeight) / 2
 
   const data: Record<string, string> = {
     line1: lines[0],
     line2: lines[1],
     line3: lines[2],
+    line1Y: String(firstLineY),
+    line2Y: String(firstLineY + lineHeight),
+    line3Y: String(firstLineY + lineHeight * 2),
+    nameY: String(firstLineY - 80),
+    logoY: String(centreY - 84),
   }
-  const svg = ogSVg.replace(/\{\{([^}]+)\}\}/g, (_, name) => data[name] || '')
+  const escapeXml = (value: string) => value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+
+  const svg = ogSVg.replace(/\{\{([^}]+)\}\}/g, (_, name) => escapeXml(data[name] || ''))
 
   console.log(`Generating ${output}`)
   try {
