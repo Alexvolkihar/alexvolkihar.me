@@ -20,15 +20,13 @@ C'est le symptôme d'une interface **sans architecture**. Exactement le même pr
 
 C'est ici qu'intervient **l'Atomic Design**. Formalisé par Brad Frost en 2013, puis développé dans son ouvrage éponyme en 2016, ce modèle propose de penser une interface non pas comme une collection de pages, mais comme un **système de composants** hiérarchisés, réutilisables et testables en isolation.
 
-Dans cet article, nous allons comprendre pourquoi l'approche « page par page » pose problème, explorer en détail les cinq niveaux de l'Atomic Design, et les mettre en pratique en parallèle sur deux stacks très différentes — **Symfony UX Twig Components** côté serveur et **Vue 3** côté client — pour démontrer que le modèle est bien agnostique de la technologie.
+La suite part de ce genre de page, parcourt les cinq niveaux du modèle, puis construit le même système deux fois : une fois avec **Symfony UX Twig Components** côté serveur, une fois avec **Vue 3** côté client. Le faire deux fois est précisément l'intérêt : cela montre que le modèle ne doit rien ni à l'un ni à l'autre.
 
 ---
 
-## 1. Le Constat de départ – L'Interface Copier-Coller (Legacy Pain)
+## 1. Le point de départ : l'interface copier-coller
 
-Pour comprendre l'intérêt de l'Atomic Design, analysons un exemple typique de vue héritée. Imaginons une page listant des produits, écrite d'un seul tenant.
-
-Voici le genre de gabarit que l'on retrouve fréquemment dans de nombreux projets :
+Voici une liste de produits écrite d'un seul tenant. Rien d'inhabituel :
 
 ```twig
 {# templates/catalog/list.html.twig #}
@@ -79,13 +77,13 @@ Voici le genre de gabarit que l'on retrouve fréquemment dans de nombreux projet
 </section>
 ```
 
-### Pourquoi ce code est fragile et problématique ?
+### Pourquoi ce gabarit est fragile
 
-À première vue, ce gabarit fonctionne parfaitement. Il affiche une grille de produits, gère l'état du stock et permet l'ajout au panier. Un designer regardant la page en production n'y verrait rien à redire.
+Il fonctionne. Il affiche la grille, gère l'état du stock, permet l'ajout au panier. Un designer regardant la page en production n'y verrait rien à redire.
 
-Pourtant, d'un point de vue architectural, c'est une dette qui s'accumule à intérêts composés. Voici pourquoi :
+C'est aussi une dette qui s'accumule à intérêts composés, pour cinq raisons distinctes.
 
-#### 1. Absence de source unique de vérité (Single Source of Truth)
+#### 1. Absence de source unique de vérité
 
 Le bleu `#2563eb`, le rayon `6px`, l'espacement `8px 16px` sont écrits **en dur**, ici et dans treize autres fichiers. Il n'existe aucun endroit où « le bouton primaire » est défini. Le changer signifie une recherche/remplacement global, avec la certitude d'en oublier et d'introduire une dérive visuelle silencieuse.
 
@@ -93,7 +91,7 @@ La conséquence est mesurable : l'écart entre la maquette Figma et la productio
 
 #### 2. Duplication de la logique de présentation
 
-Le formatage du prix (`priceCents / 100`, séparateur français, symbole €) est répété partout où un prix s'affiche. Le jour où l'on ajoute le multi-devise ou la TVA affichée, il faut retrouver toutes les occurrences. Ce n'est pas de la logique métier — c'est de la **logique de présentation**, et elle mérite le même soin.
+Le formatage du prix (`priceCents / 100`, séparateur français, symbole €) est répété partout où un prix s'affiche. Le jour où l'on ajoute le multi-devise ou la TVA affichée, il faut retrouver toutes les occurrences. Ce n'est pas de la logique métier, c'est de la logique de présentation, et elle mérite le même soin.
 
 #### 3. Un rendu impossible à tester ou documenter en isolation
 
@@ -116,11 +114,11 @@ Le designer parle de « la carte produit » et de « la puce de statut ». Le co
 
 ## 2. Qu'est-ce que l'Atomic Design ?
 
-L'objectif de l'Atomic Design est simple : **cesser de concevoir des pages, commencer à concevoir un système**. Une page n'est plus une unité de conception, mais le **résultat** de l'assemblage de composants plus petits, eux-mêmes assemblés à partir de composants encore plus petits.
+L'objectif est de cesser de concevoir des pages pour commencer à concevoir un système. Une page cesse d'être une unité de conception et devient le résultat de l'assemblage de composants plus petits, eux-mêmes assemblés à partir de composants encore plus petits.
 
-Brad Frost emprunte sa métaphore à la chimie : la matière est composée d'atomes, qui se lient en molécules, qui forment des organismes. Aucun de ces niveaux n'est arbitraire — chacun décrit un degré différent de complexité et de spécificité.
+Brad Frost emprunte sa métaphore à la chimie : la matière est composée d'atomes, qui se lient en molécules, qui forment des organismes. Aucun de ces niveaux n'est arbitraire. Chacun décrit un degré différent de complexité et de spécificité.
 
-### Les 5 Niveaux de l'Atomic Design
+### Les cinq niveaux
 
 ```mermaid
 graph LR
@@ -146,33 +144,33 @@ graph LR
     class Pages page;
 ```
 
-#### 1. Les Atomes
+#### 1. Les atomes
 
-Ce sont les briques indivisibles de l'interface : un bouton, un champ de saisie, une étiquette, une icône, un titre. Un atome n'a **aucun sens fonctionnel isolé** — un champ de saisie sans étiquette ne sert à rien — mais il porte l'intégralité de l'identité visuelle du produit.
+Les briques indivisibles de l'interface : un bouton, un champ de saisie, une étiquette, une icône, un titre. Un atome n'a aucun sens fonctionnel isolé (un champ de saisie sans étiquette ne sert à rien), et pourtant il porte l'intégralité de l'identité visuelle du produit.
 
-- Ils ne contiennent **aucune logique métier**.
+- Ils ne contiennent aucune logique métier.
 - Ils ne connaissent ni l'API, ni le store, ni la route courante.
-- Ils sont entièrement pilotés par leurs propriétés (props/attributs).
+- Ils sont entièrement pilotés par leurs props ou attributs.
 
-#### 2. Les Molécules
+#### 2. Les molécules
 
 Une molécule est un assemblage d'atomes qui, ensemble, accomplissent **une seule tâche** cohérente. Une étiquette + un champ + un message d'erreur forment un `FormField`. Un champ + un bouton forment un `SearchField`.
 
 C'est le premier niveau où l'interface devient *utilisable*. Une molécule peut porter un état d'interface local (ouvert/fermé, survolé), mais toujours pas de logique métier.
 
-#### 3. Les Organismes
+#### 3. Les organismes
 
 Un organisme est une section relativement complexe et autonome de l'interface : un en-tête de site, une carte produit, une grille de résultats, un formulaire complet. Il combine molécules et atomes.
 
 C'est ici que le **vocabulaire métier** apparaît légitimement : un organisme peut s'appeler `ProductCard` et recevoir un objet `Product`. Il est spécifique au produit, mais reste réutilisable d'une page à l'autre.
 
-#### 4. Les Templates
+#### 4. Les templates
 
 Un template est un squelette de page : il définit la **mise en page** et l'emplacement des organismes, sans données réelles. C'est l'équivalent du wireframe, mais en code.
 
 Son rôle est de valider la structure, la densité et le comportement responsive indépendamment du contenu.
 
-#### 5. Les Pages
+#### 5. Les pages
 
 Une page est l'instance concrète d'un template, alimentée par des **données réelles**. C'est le seul niveau connecté au monde extérieur : routage, appels de données, gestion des métadonnées SEO, état global.
 
@@ -180,9 +178,9 @@ C'est aussi le niveau où l'on teste la robustesse du système : que se passe-t-
 
 ---
 
-### Le Secret : La Loi de Dépendance Descendante
+### La loi de dépendance descendante
 
-Si l'architecture hexagonale tient tout entière dans le principe d'inversion de dépendance, l'Atomic Design tient dans une règle tout aussi simple, et tout aussi souvent violée :
+L'architecture hexagonale tient dans le principe d'inversion de dépendance. L'Atomic Design tient dans une règle tout aussi courte, et violée tout aussi souvent :
 
 > [!IMPORTANT]
 > **Un composant ne peut composer que des composants de niveau strictement inférieur, et ne doit jamais rien savoir de son contexte d'utilisation.**
@@ -206,17 +204,17 @@ C'est exactement le même mouvement que dans un hexagone : **on isole ce qui est
 > [!NOTE]
 > Brad Frost insiste sur un point souvent oublié : l'Atomic Design **n'est pas un processus linéaire**. On ne conçoit pas d'abord tous les atomes, puis toutes les molécules. On navigue en permanence entre les niveaux, en partant souvent d'une maquette de page pour en extraire les composants. Le modèle est une grille de lecture, pas une méthodologie séquentielle.
 
-Dans la suite de cet article, nous allons refactoriser notre gabarit spaghetti en un système propre, en implémentant chaque niveau **en parallèle** dans deux technologies radicalement différentes.
+La suite de l'article refactorise ce gabarit spaghetti en un système, en construisant chaque niveau dans les deux technologies côte à côte.
 
 ---
 
-## 3. Le Niveau Zéro : Les Design Tokens
+## 3. Le niveau zéro : les design tokens
 
-Avant même de parler d'atomes, il faut parler de ce dont ils sont faits. Un bouton bleu qui code `#2563eb` en dur n'est pas un atome : c'est une valeur magique déguisée en composant.
+Avant les atomes, ce dont les atomes sont faits. Un bouton bleu qui code `#2563eb` en dur n'est pas un atome, c'est une valeur magique déguisée en composant.
 
-Les **design tokens** sont les particules subatomiques du système : les valeurs nommées de couleur, d'espacement, de typographie, de rayon et d'ombre. Ils constituent le contrat entre le design et le code.
+Les design tokens sont les valeurs nommées de couleur, d'espacement, de typographie, de rayon et d'ombre. Ils constituent le contrat entre le design et le code.
 
-#### En CSS natif (utilisable par Twig comme par Vue)
+#### En CSS natif, utilisable par Twig comme par Vue
 
 ```css
 /* assets/styles/tokens.css */
@@ -257,7 +255,7 @@ Les **design tokens** sont les particules subatomiques du système : les valeurs
 }
 ```
 
-#### En UnoCSS (côté Vue)
+#### En UnoCSS, côté Vue
 
 ```ts
 // unocss.config.ts
@@ -277,34 +275,28 @@ export default defineConfig({
 ```
 
 > [!TIP]
-> Le test décisif d'un bon système de tokens : **rechercher `#` dans le dossier des composants ne doit remonter aucun résultat**. Toute couleur littérale trouvée dans un atome est un token qui n'a pas encore été nommé. C'est une règle de lint triviale à écrire et étonnamment efficace.
+> Le test décisif d'un bon système de tokens : rechercher `#` dans le dossier des composants ne doit remonter aucun résultat. Toute couleur littérale trouvée dans un atome est un token qui n'a pas encore été nommé. C'est une règle de lint triviale à écrire et étonnamment efficace.
 
-Une nuance importante : nommez vos tokens par leur **rôle** (`--color-danger-bg`), jamais par leur apparence (`--color-red-100`). Sinon le jour où le rouge devient orange, vous vous retrouvez avec un token nommé `red` qui vaut `#f97316`.
+Une nuance importante : nommez vos tokens par leur rôle (`--color-danger-bg`), jamais par leur apparence (`--color-red-100`). Sinon, le jour où le rouge devient orange, vous vous retrouvez avec un token nommé `red` qui vaut `#f97316`.
 
 ---
 
-## 4. La Pratique : Les Atomes
+## 4. En pratique : les atomes
 
-Attaquons le refactoring. Notre bouton primaire, réécrit quatorze fois, va devenir un atome unique.
+Attaquons le refactoring. Ce bouton primaire réécrit quatorze fois devient un atome unique.
 
 ### Règles de conception d'un atome
 
-Un atome **doit** :
-- N'exposer que des propriétés décrivant son **apparence** et son **état**, jamais son contexte.
-- Consommer exclusivement des design tokens.
-- Émettre des événements plutôt que d'agir (`click`, pas `addToCart`).
+Un atome n'expose que des propriétés décrivant son apparence et son état, jamais son contexte. Il consomme des design tokens et rien d'autre. Et il émet des événements au lieu d'agir : `click`, pas `addToCart`.
 
-Un atome **ne doit jamais** :
-- Contenir de marge externe (`margin`) — le positionnement appartient au parent.
-- Accéder à un store, une route, ou une API.
-- Porter un nom métier (`CheckoutButton` est un mauvais nom d'atome).
+Un atome ne porte jamais de marge externe, ne touche jamais à un store, une route ou une API, et ne porte jamais de nom métier. `CheckoutButton` est un mauvais nom d'atome.
 
 > [!IMPORTANT]
-> La règle de la **marge externe interdite** est la plus souvent violée, et la plus coûteuse. Un atome qui déclare `margin-bottom: 16px` impose sa mise en page à tous ses parents. Le jour où vous le placez dans une barre horizontale, vous vous battez avec des `margin-bottom: 0 !important`. Le padding *interne* appartient à l'atome ; l'espacement *entre* les éléments appartient au conteneur (via `gap`, idéalement).
+> La règle de la marge externe interdite est la plus souvent violée, et la plus coûteuse. Un atome qui déclare `margin-bottom: 16px` impose sa mise en page à tous ses parents. Le jour où vous le placez dans une barre horizontale, vous vous battez avec des `margin-bottom: 0 !important`. Le padding *interne* appartient à l'atome ; l'espacement *entre* les éléments appartient au conteneur, idéalement via `gap`.
 
-### Implémentation Symfony : le composant Twig anonyme
+### Symfony : le composant Twig anonyme
 
-Symfony UX Twig Components permet de déclarer un composant sans aucune classe PHP tant qu'il n'a pas de logique. C'est exactement le cas d'un atome.
+Symfony UX Twig Components permet de déclarer un composant sans aucune classe PHP tant qu'il n'a pas de logique. C'est exactement la situation d'un atome.
 
 ```twig
 {# templates/components/Atom/Button.html.twig #}
@@ -343,9 +335,9 @@ Utilisation :
 <twig:Atom:Button type="submit">Valider</twig:Atom:Button>
 ```
 
-Notez `{{ attributes.defaults({...}) }}` : c'est le mécanisme qui permet au parent de passer `data-*`, `aria-*` ou des attributs Stimulus sans que l'atome ait besoin de les connaître. C'est un point crucial d'extensibilité — sans lui, chaque nouveau besoin ajouterait une prop à l'atome.
+Notez `{{ attributes.defaults({...}) }}`. C'est ce qui permet au parent de passer `data-*`, `aria-*` ou des attributs Stimulus sans que l'atome sache qu'ils existent. Sans lui, chaque nouveau besoin ajouterait une prop de plus à l'atome.
 
-### Implémentation Vue 3 : le même atome en SFC
+### Vue 3 : le même atome en SFC
 
 ```vue
 <!-- src/components/atoms/AButton.vue -->
@@ -392,9 +384,9 @@ Utilisation :
 ```
 
 > [!NOTE]
-> Observez que les deux implémentations sont **structurellement identiques** : mêmes props, mêmes variantes, mêmes classes, même slot. Seule la syntaxe diffère. C'est la preuve que l'Atomic Design décrit une architecture, pas une technologie. Une équipe qui migre de Twig vers Vue (ou l'inverse) migre composant par composant sans repenser le système.
+> Les deux implémentations sont structurellement identiques : mêmes props, mêmes variantes, mêmes classes, même slot. Seule la syntaxe diffère. L'Atomic Design décrit une architecture, pas une technologie, et c'est pourquoi une équipe qui passe de Twig à Vue migre composant par composant sans repenser le système.
 
-### Un second atome : le Badge
+### Un second atome : le badge
 
 ```twig
 {# templates/components/Atom/Badge.html.twig #}
@@ -432,17 +424,17 @@ const tones = {
 </template>
 ```
 
-Remarquez le nommage : `tone="danger"`, pas `color="red"`. L'atome expose une **intention sémantique**, pas une valeur visuelle. Le jour où le design décide que « danger » devient orange, aucun appelant ne change.
+Remarquez le nommage : `tone="danger"`, pas `color="red"`. L'atome expose une intention, pas une valeur visuelle. Le jour où le design décide que « danger » devient orange, aucun appelant ne change.
 
 ---
 
-## 5. Les Molécules : Assembler pour une tâche
+## 5. Les molécules : assembler pour une tâche
 
-Une molécule combine des atomes pour accomplir **une seule chose**. C'est le test le plus fiable pour distinguer une molécule d'un organisme : si vous ne pouvez pas décrire son rôle en une phrase sans utiliser « et », c'est probablement un organisme.
+Une molécule combine des atomes pour accomplir une seule chose. C'est aussi le test le plus fiable pour distinguer une molécule d'un organisme : si vous ne pouvez pas décrire son rôle en une phrase sans dire « et », c'est probablement un organisme.
 
-### Le `StockBadge` : de la donnée brute à l'intention visuelle
+### `StockBadge`, de la donnée brute à l'intention visuelle
 
-Notre gabarit legacy contenait un `if/else` sur le stock, dupliqué partout. C'est une molécule : elle traduit une donnée en une représentation visuelle.
+Le gabarit legacy contenait un `if/else` sur le stock, dupliqué partout. C'est une molécule : elle traduit une donnée en représentation visuelle.
 
 ```twig
 {# templates/components/Molecule/StockBadge.html.twig #}
@@ -471,9 +463,9 @@ const { stock } = defineProps<{ stock: number }>()
 ```
 
 > [!TIP]
-> Le seuil `> 10` est une **règle métier** qui s'est glissée dans une molécule. Dans un système rigoureux, ce calcul appartient au domaine, et la molécule devrait recevoir un statut déjà déterminé (`status: 'in_stock' | 'low' | 'out'`). C'est un arbitrage pragmatique très courant : tolérable pour une règle d'affichage triviale, à refuser dès que le seuil devient configurable ou dépend du client.
+> Le seuil `> 10` est une règle métier qui s'est glissée dans une molécule. À la rigueur, ce calcul appartient au domaine, et la molécule devrait recevoir un statut déjà déterminé (`status: 'in_stock' | 'low' | 'out'`). C'est un arbitrage pragmatique courant : tolérable pour une règle d'affichage triviale, à refuser dès que le seuil devient configurable ou dépend du client.
 
-### Le `PriceTag` : centraliser le formatage
+### `PriceTag`, centraliser le formatage
 
 ```twig
 {# templates/components/Molecule/PriceTag.html.twig #}
@@ -507,9 +499,9 @@ const formatted = computed(() =>
 </template>
 ```
 
-Le formatage monétaire existe désormais **à un seul endroit** par stack. Ajouter une devise, changer la locale ou afficher « HT/TTC » se fait dans un fichier.
+Le formatage monétaire existe désormais à un seul endroit par stack. Ajouter une devise, changer la locale ou afficher « HT/TTC » se fait dans un fichier.
 
-### Le `FormField` : le cas d'école
+### `FormField`, le cas d'école
 
 ```vue
 <!-- src/components/molecules/MFormField.vue -->
@@ -543,17 +535,17 @@ const describedBy = computed(() =>
 </template>
 ```
 
-Cette molécule illustre une responsabilité que seul ce niveau peut porter : **l'accessibilité relationnelle**. Le lien entre l'étiquette et le champ (`for`/`id`), et entre le champ et son message d'erreur (`aria-describedby`), n'existe qu'au moment de l'assemblage. Aucun atome ne peut le gérer seul.
+Cette molécule porte une responsabilité que seul ce niveau peut porter : l'accessibilité relationnelle. Le lien entre l'étiquette et le champ (`for`/`id`), et entre le champ et son message d'erreur (`aria-describedby`), n'existe qu'au moment de l'assemblage. Aucun atome ne peut le gérer seul.
 
-C'est un argument souvent sous-estimé en faveur de l'Atomic Design : une accessibilité correcte est **structurellement impossible** à garantir dans un système où chaque page réassemble ses champs à la main. Centralisée dans une molécule, elle est acquise une fois pour toutes.
+C'est un argument sous-estimé en faveur du modèle. Une accessibilité correcte est structurellement impossible à garantir dans un système où chaque page réassemble ses champs à la main. Centralisée dans une molécule, elle est acquise une fois.
 
 ---
 
-## 6. Les Organismes : Le Métier entre en scène
+## 6. Les organismes : le métier entre en scène
 
-Un organisme est une section autonome de l'interface. C'est le premier niveau autorisé à connaître la **forme** des données métier.
+Un organisme est une section autonome de l'interface. C'est le premier niveau autorisé à connaître la forme des données métier.
 
-### La `ProductCard`
+### `ProductCard`
 
 ```twig
 {# templates/components/Organism/ProductCard.html.twig #}
@@ -625,15 +617,13 @@ const emit = defineEmits<{ addToCart: [productId: string] }>()
 </template>
 ```
 
-Deux détails architecturaux méritent l'attention :
+Deux détails méritent qu'on s'y arrête.
 
-**1. L'organisme ne déclenche pas l'action, il la signale.** Côté Vue, il émet `addToCart` ; côté Twig, il délègue à un contrôleur Stimulus via des attributs. Dans les deux cas, l'organisme ignore totalement l'existence de `/api/cart/add`. Il reste rendable dans une documentation, un test, ou une maquette sans qu'aucun backend ne tourne.
+L'organisme ne déclenche pas l'action, il la signale. Côté Vue il émet `addToCart` ; côté Twig il délègue à un contrôleur Stimulus via des attributs. Dans les deux cas l'organisme ignore que `/api/cart/add` existe, ce qui le laisse rendable dans une documentation, un test ou une maquette sans qu'aucun backend ne tourne. C'est l'inversion de dépendance de l'hexagone déplacée dans l'interface : le composant déclare ce dont il a besoin, l'appelant fournit l'implémentation.
 
-C'est très exactement l'inversion de dépendance de l'hexagone, transposée à l'interface : **le composant déclare ce dont il a besoin, l'appelant fournit l'implémentation.**
+Le seul `margin` du fichier est `mt-auto` sur le bouton, et il est légitime, car c'est la carte, en tant que parent, qui décide de pousser son propre bouton en bas. La règle « pas de marge externe » régit le rapport d'un composant à *son* parent, pas ce qui se passe à l'intérieur de son périmètre.
 
-**2. Le seul `margin` du fichier est `mt-auto` sur le bouton** — et il est légitime, car c'est le parent (la carte) qui décide de pousser son bouton en bas. La règle « pas de marge externe » s'applique au composant vis-à-vis de *son* parent, pas à l'intérieur de son propre périmètre.
-
-### La `ProductGrid`
+### `ProductGrid`
 
 ```vue
 <!-- src/components/organisms/OProductGrid.vue -->
@@ -669,13 +659,13 @@ defineEmits<{ addToCart: [productId: string] }>()
 </template>
 ```
 
-Cet organisme porte une responsabilité que la page ne devrait pas avoir à répéter : **les trois états d'une collection** (chargement, vide, peuplé). Dans le code legacy, l'état vide et l'état de chargement n'existaient tout simplement pas — ils apparaissaient comme une page blanche. En les inscrivant dans l'organisme, ils deviennent impossibles à oublier.
+Cet organisme porte ce que la page ne devrait pas avoir à répéter : les trois états d'une collection, chargement, vide et peuplé. Dans le code legacy, l'état vide et l'état de chargement n'existaient tout simplement pas. Ils apparaissaient sous forme de page blanche. Inscrits dans l'organisme, ils deviennent impossibles à oublier.
 
 ---
 
-## 7. Templates et Pages : Structure puis Données
+## 7. Templates et pages : la structure, puis les données
 
-### Le Template : la mise en page sans le contenu
+### Le template : la mise en page sans le contenu
 
 ```vue
 <!-- src/components/templates/TCatalogLayout.vue -->
@@ -701,9 +691,9 @@ Cet organisme porte une responsabilité que la page ne devrait pas avoir à rép
 </template>
 ```
 
-Ce fichier ne contient **aucune donnée, aucune importation, aucune logique**. Il ne décrit que des zones et leur comportement responsive. On peut le valider avec des blocs gris avant même que le premier organisme n'existe.
+Ce fichier ne contient aucune donnée, aucune importation, aucune logique. Il décrit des zones et leur comportement responsive, rien d'autre. On peut le valider avec des blocs gris avant même que le premier organisme n'existe.
 
-L'équivalent Twig repose sur les blocs, mécanisme natif du langage :
+L'équivalent Twig repose sur les blocs, que le langage fournit déjà :
 
 ```twig
 {# templates/components/Template/CatalogLayout.html.twig #}
@@ -727,7 +717,7 @@ L'équivalent Twig repose sur les blocs, mécanisme natif du langage :
 </div>
 ```
 
-### La Page : le seul point de contact avec le monde extérieur
+### La page : le seul point de contact avec le monde extérieur
 
 ```vue
 <!-- pages/catalog.vue -->
@@ -767,15 +757,15 @@ useHead({ title: 'Catalogue — Nos produits' })
 </template>
 ```
 
-La page est devenue un **fichier de câblage**. Elle ne contient plus une seule classe CSS, plus un seul `if`, plus un seul formatage. Elle se contente de brancher des données réelles sur une structure existante — exactement comme un contrôleur d'infrastructure branche une requête HTTP sur un cas d'utilisation.
+La page est devenue un fichier de câblage. Plus une seule classe CSS, plus un seul `if`, plus un seul formatage. Elle branche des données réelles sur une structure existante, comme un contrôleur d'infrastructure branche une requête HTTP sur un cas d'utilisation.
 
-Comparez avec le gabarit du chapitre 1 : nous sommes passés de 45 lignes mêlant styles inline, formatage, logique conditionnelle et appels réseau, à une déclaration lisible en un coup d'œil.
+Comparez avec le gabarit du chapitre 1. Quarante-cinq lignes de styles inline, de formatage, de conditions et d'appels réseau sont devenues une déclaration lisible d'un coup d'œil.
 
 ---
 
-## 8. Mise en Pratique : Arborescence et Conventions
+## 8. Arborescence et conventions
 
-### Structure des Dossiers
+### Structure des dossiers
 
 #### Côté Symfony
 
@@ -829,9 +819,9 @@ pages/
 └── catalog.vue               <-- Le niveau "Page", géré par le routeur
 ```
 
-Le préfixe d'une lettre (`A`/`M`/`O`/`T`) est une convention discutée. Son avantage décisif : **le niveau d'un composant est visible sur son site d'utilisation**, sans ouvrir de fichier. Lire `<OProductCard>` à l'intérieur d'un `AButton.vue` signale immédiatement une violation, à l'œil nu, en revue de code.
+Le préfixe d'une lettre (`A`/`M`/`O`/`T`) est une convention discutée. Son avantage : le niveau d'un composant est visible là où on l'utilise, sans ouvrir de fichier. Lire `<OProductCard>` à l'intérieur d'un `AButton.vue` signale une violation à l'œil nu, en revue de code.
 
-Son inconvénient : renommer un composant qui change de niveau touche tous les appelants. C'est précisément ce que l'on veut — un changement de niveau *est* un changement d'architecture, il mérite d'être visible.
+Son inconvénient : renommer un composant qui change de niveau touche tous les appelants. C'est précisément ce que l'on veut. Un changement de niveau *est* un changement d'architecture, il mérite d'être visible.
 
 ### Les conventions de nommage
 
@@ -842,19 +832,17 @@ Son inconvénient : renommer un composant qui change de niveau touche tous les a
 | Organisme | Son concept métier | `ProductCard`, `SiteHeader` | `Section2`, `BigBox` |
 | Template | Sa mise en page | `CatalogLayout`, `ArticleLayout` | `Page1`, `MainTemplate` |
 
-La règle sous-jacente : **le nom d'un composant doit refléter son niveau d'abstraction**. Un atome nommé `CheckoutButton` est un aveu qu'il connaît son contexte, donc qu'il n'est pas réutilisable, donc que ce n'est pas un atome.
+La règle sous-jacente est que le nom d'un composant doit refléter son niveau d'abstraction. Un atome nommé `CheckoutButton` est un aveu qu'il connaît son contexte, donc qu'il n'est pas réutilisable, donc que ce n'est pas un atome.
 
 ---
 
-## 9. Maîtriser l'Atomic Design (Concepts Avancés)
-
-Une fois les fondations posées, le modèle libère son potentiel à travers des pratiques qui garantissent l'intégrité du système sur le long terme.
+## 9. Pour aller plus loin
 
 ### Tester les composants en isolation
 
-Découpler les composants de leur contexte rend possible ce qui était impossible au chapitre 1 : les tester **sans démarrer l'application**.
+Découpler les composants de leur contexte rend possible ce qui était impossible au chapitre 1 : les tester sans démarrer l'application.
 
-#### Côté Vue : Vitest + Testing Library
+#### Côté Vue : Vitest et Testing Library
 
 ```ts
 // src/components/molecules/MStockBadge.test.ts
@@ -916,13 +904,13 @@ final class ButtonTest extends KernelTestCase
 ```
 
 > [!TIP]
-> Ces tests s'exécutent en quelques millisecondes et ne nécessitent ni base de données, ni navigateur, ni session authentifiée. Sur un système de cinquante composants, la suite complète tourne en moins de trois secondes — la boucle de rétroaction nécessaire pour refactoriser sereinement.
+> Ces tests s'exécutent en quelques millisecondes et ne nécessitent ni base de données, ni navigateur, ni session authentifiée. Sur un système de cinquante composants, la suite complète tourne en moins de trois secondes, c'est-à-dire la boucle de rétroaction dont on a besoin pour refactoriser sans crainte.
 
 ### Documenter : la vitrine du système
 
-Un design system que personne ne consulte est réinventé à chaque sprint. Deux approches selon la stack :
+Un design system que personne ne consulte est réinventé à chaque sprint. Deux approches, selon la stack.
 
-**Côté Vue**, Storybook (ou Histoire) rend chaque composant dans toutes ses variantes :
+Côté Vue, Storybook (ou Histoire) rend chaque composant dans toutes ses variantes :
 
 ```ts
 // src/components/atoms/AButton.stories.ts
@@ -952,7 +940,7 @@ export const Primary: StoryObj<typeof meta> = {
 export const Disabled: StoryObj<typeof meta> = { args: { disabled: true } }
 ```
 
-**Côté Symfony**, l'intégration de Storybook est possible mais lourde. Une approche nettement plus pragmatique consiste à exposer une route de vitrine, réservée à l'environnement de développement :
+Côté Symfony, l'intégration de Storybook est possible mais lourde. Exposer une route de vitrine réservée à l'environnement de développement coûte bien moins cher :
 
 ```php
 <?php
@@ -975,11 +963,11 @@ final class DesignSystemController extends AbstractController
 }
 ```
 
-Le gabarit associé rend chaque atome dans toutes ses combinaisons. C'est moins riche que Storybook, mais cela coûte une heure à mettre en place, ne rajoute aucune dépendance de build, et suffit à couvrir 90 % du besoin : **voir tous les états d'un coup d'œil**.
+Le gabarit associé rend chaque atome dans toutes ses combinaisons. C'est plus pauvre que Storybook, mais cela coûte une heure à mettre en place, n'ajoute aucune dépendance de build, et couvre 90 % du besoin : voir tous les états d'un coup d'œil.
 
-### Contrôler l'Architecture automatiquement
+### Contrôler l'architecture automatiquement
 
-La loi de dépendance descendante ne survit pas à la pression de livraison si elle n'est vérifiée que par la revue de code. Comme pour un hexagone, il faut la rendre **bloquante en CI**.
+La loi de dépendance descendante ne survit pas à la pression de livraison si la revue de code est la seule à la vérifier. Comme pour un hexagone, il faut la rendre bloquante en CI.
 
 #### Côté TypeScript : `eslint-plugin-boundaries`
 
@@ -1020,7 +1008,7 @@ Toute tentative d'importer un organisme depuis un atome fait désormais échouer
 
 #### Côté PHP : Deptrac, avec une réserve importante
 
-Deptrac raisonne sur les **espaces de noms PHP**. Il couvre donc parfaitement les composants dotés d'une classe :
+Deptrac raisonne sur les espaces de noms PHP, il couvre donc parfaitement les composants dotés d'une classe :
 
 ```yaml
 # deptrac.yaml
@@ -1047,7 +1035,7 @@ deptrac:
 ```
 
 > [!WARNING]
-> **La limite à connaître :** un composant Twig *anonyme* n'a pas de classe PHP. Sa dépendance vit dans la balise `<twig:Organism:ProductCard />` à l'intérieur d'un fichier `.twig`, totalement invisible pour Deptrac. Or ce sont précisément les atomes et molécules — les plus critiques à protéger — qui sont le plus souvent anonymes.
+> **La limite à connaître :** un composant Twig *anonyme* n'a pas de classe PHP. Sa dépendance vit dans la balise `<twig:Organism:ProductCard />` à l'intérieur d'un fichier `.twig`, totalement invisible pour Deptrac. Or les atomes et les molécules, les plus critiques à protéger, sont précisément ceux qui sont le plus souvent anonymes.
 
 Un contrôle complémentaire, trivial mais efficace, comble le trou :
 
@@ -1081,13 +1069,13 @@ exit $status
 
 Vingt lignes de shell branchées sur la CI valent mieux qu'une convention que tout le monde connaît et que personne n'applique.
 
-### Les Anti-patterns les plus coûteux
+### Les anti-patterns les plus coûteux
 
 #### 1. La paralysie taxonomique
 
 Le symptôme : une équipe débat trente minutes pour savoir si `UserAvatar` est une molécule ou un organisme.
 
-C'est le piège le plus fréquent, et le plus stérile. Brad Frost lui-même le répète : la taxonomie est un **outil de communication**, pas une science. Adoptez une règle de désescalade : au-delà de deux minutes de débat, placez le composant au niveau supérieur et passez à la suite. Un composant mal classé coûte un déplacement de fichier ; une réunion hebdomadaire de classification coûte un projet.
+C'est le piège le plus fréquent, et le plus stérile. Brad Frost lui-même le répète : la taxonomie est un outil de communication, pas une science. Adoptez une règle de désescalade. Au-delà de deux minutes de débat, placez le composant au niveau supérieur et passez à la suite. Un composant mal classé coûte un déplacement de fichier ; une réunion hebdomadaire de classification coûte un projet.
 
 #### 2. L'atome omniscient
 
@@ -1100,7 +1088,7 @@ C'est le piège le plus fréquent, et le plus stérile. Brad Frost lui-même le 
 />
 ```
 
-Chaque cas particulier a ajouté une prop, jusqu'à ce que l'atome devienne illisible et intestable — 2²³ combinaisons théoriques. Le remède est la **composition plutôt que la configuration** : un jeu réduit de variantes sémantiques, et des slots pour tout le reste.
+Chaque cas particulier a ajouté une prop, jusqu'à ce que l'atome devienne illisible et intestable, avec 2²³ combinaisons théoriques. Le remède est la composition plutôt que la configuration : un jeu réduit de variantes sémantiques, et des slots pour tout le reste.
 
 ```vue
 <!-- ✅ La variation passe par le contenu, pas par les props -->
@@ -1117,7 +1105,7 @@ Un fichier `MButtonWrapper.vue` dont le contenu est `<AButton><slot /></AButton>
 
 #### 4. Le prop drilling à travers les niveaux
 
-Passer `currentUser` de la page jusqu'à un atome, à travers quatre niveaux, indique que le découpage est mauvais — ou qu'il faut un mécanisme de contexte (`provide`/`inject` en Vue, variables globales de contexte en Twig). Un atome qui a besoin de connaître l'utilisateur courant n'est, par définition, pas un atome.
+Passer `currentUser` de la page jusqu'à un atome, à travers quatre niveaux, signifie soit que le découpage est mauvais, soit qu'il manque un mécanisme de contexte (`provide`/`inject` en Vue, variables globales de contexte en Twig). Un atome qui a besoin de connaître l'utilisateur courant n'est, par définition, pas un atome.
 
 #### 5. Le nommage métier prématuré
 
@@ -1127,57 +1115,33 @@ Passer `currentUser` de la page jusqu'à un atome, à travers quatre niveaux, in
 
 L'Atomic Design coexiste avec plusieurs modèles voisins, et il est utile de savoir lequel répond à quelle question.
 
-**Feature-Sliced Design (FSD)** organise le code par *fonctionnalité* plutôt que par niveau d'abstraction. Les deux ne s'opposent pas : dans les grosses applications, on voit fréquemment un design system atomique **transverse** (les `shared/ui` de FSD sont littéralement des atomes et molécules), et un découpage par feature au-dessus. C'est probablement la combinaison la plus solide pour une application de grande taille.
+Feature-Sliced Design organise le code par *fonctionnalité* plutôt que par niveau d'abstraction. Les deux ne s'opposent pas. Dans les grosses applications, on voit fréquemment un design system atomique transverse (les `shared/ui` de FSD sont littéralement des atomes et des molécules) surmonté d'un découpage par feature, et c'est probablement la combinaison la plus solide à grande échelle.
 
-**ITCSS** répond à la même intuition côté CSS : organiser par spécificité croissante, du générique au spécifique. Avec un moteur atomique comme UnoCSS ou Tailwind, la question perd largement de sa pertinence — les tokens et les variantes de composants remplacent la cascade.
+ITCSS répond à la même intuition côté CSS : organiser par spécificité croissante, du générique au spécifique. Avec un moteur atomique comme UnoCSS ou Tailwind, la question perd largement de sa pertinence, puisque les tokens et les variantes de composants remplacent la cascade.
 
-**Les systèmes à trois niveaux.** Beaucoup d'équipes matures aplatissent le modèle en `primitives / components / features`, en fusionnant atomes et molécules d'un côté, organismes et templates de l'autre. C'est un choix parfaitement défendable : la valeur du modèle réside dans la **loi de dépendance descendante**, pas dans le nombre exact d'étages. Cinq niveaux sur un projet de trente composants relève de la cérémonie.
-
----
-
-### Compromis : Quand l'adopter et quand l'éviter ?
-
-Aucune architecture n'est une solution miracle. L'Atomic Design apporte de grands bénéfices mais introduit une complexité accidentelle réelle.
-
-#### Avantages
-
-* **Cohérence visuelle garantie par construction** : un bouton n'a qu'une seule définition, donc qu'un seul aspect possible.
-* **Vélocité croissante** : les premières pages sont plus lentes à produire, les suivantes de plus en plus rapides, car le vocabulaire existe déjà.
-* **Langage commun design/développement** : le designer et le développeur nomment la même chose de la même façon, ce qui supprime une couche entière de malentendus.
-* **Testabilité et documentation** : chaque composant est rendable en isolation, dans tous ses états, sans démarrer l'application.
-* **Accessibilité mutualisée** : les relations ARIA, la gestion du focus et les états sont résolus une fois, dans les molécules, plutôt que réinventés page par page.
-
-#### Inconvénients
-
-* **Surcoût initial** : un système même modeste représente plusieurs dizaines de fichiers avant que la première page ne s'affiche.
-* **Coût de l'indirection** : comprendre le rendu d'une page demande d'ouvrir quatre ou cinq fichiers. Le lecteur perd la vue d'ensemble que donnait le gabarit monolithique.
-* **Risque de sur-abstraction** : la tentation d'anticiper des variantes qui ne serviront jamais est forte, et coûte cher.
-* **Discipline continue requise** : sans contrôle automatisé, la loi de dépendance descendante se dégrade en quelques mois.
-
-#### Quand l'utiliser ?
-
-* Applications avec de nombreux écrans partageant un vocabulaire visuel commun (SaaS, back-office, e-commerce).
-* Projets impliquant plusieurs développeurs front, ou plusieurs équipes sur un même produit.
-* Produits destinés à durer plusieurs années, où le design évoluera par refontes successives.
-* Contextes où la cohérence visuelle est contractuelle ou réglementaire — une charte de marque stricte, ou un logiciel médical où l'ergonomie fait partie de l'analyse de risque.
-
-#### Quand l'éviter ?
-
-* **Site vitrine de quelques pages** : le système coûterait plus cher que les pages qu'il sert.
-* **Prototype ou MVP jetable** : privilégiez la vitesse, quitte à extraire un système une fois le modèle validé.
-* **Design system tiers déjà en place** : si vous utilisez Vuetify, Bootstrap ou une bibliothèque de composants maison, vos atomes existent déjà. Démarrez directement au niveau molécule — recréer un `<AButton>` par-dessus un composant tiers est de la ré-abstraction pure.
-* **Interface unique et fortement spécialisée** : un tableau de bord temps réel d'un seul écran n'a rien à mutualiser.
+Restent les systèmes à trois niveaux. Beaucoup d'équipes matures aplatissent le modèle en `primitives / components / features`, en fusionnant atomes et molécules d'un côté, organismes et templates de l'autre. Parfaitement défendable : la valeur réside dans la loi de dépendance descendante, pas dans le nombre exact d'étages. Cinq niveaux sur un projet de trente composants relève de la cérémonie.
 
 ---
 
-## Conclusion et Comparatif
+### Quand l'adopter, et quand s'abstenir
 
-En hiérarchisant l'interface en niveaux de spécificité croissante, et en imposant que les dépendances ne pointent que vers le bas, nous avons obtenu :
+Aucune architecture n'est une solution miracle. L'Atomic Design achète des choses réelles et coûte des choses réelles.
 
-1. **Une source unique de vérité** : le bouton primaire existe en un seul exemplaire. Changer son rayon de bordure, c'est modifier un fichier, pas vingt-trois.
-2. **Des composants testables et documentables** : chaque niveau se rend en isolation, en quelques millisecondes, sans base de données ni navigateur.
-3. **Une indépendance technologique** : nous avons implémenté le même système en Twig et en Vue avec une structure identique. Le modèle décrit une architecture, pas un framework.
-4. **Un langage commun** : designers et développeurs désignent enfin les mêmes objets par les mêmes noms.
+Ce que vous y gagnez : un bouton avec une seule définition, donc un seul aspect possible. Une vélocité qui part bas et remonte, puisque les premières pages sont lentes à produire et que toutes les suivantes vont plus vite, le vocabulaire étant déjà là. Un designer et un développeur qui nomment la même chose de la même façon, ce qui supprime une couche entière de malentendus. Des composants rendables en isolation, dans tous leurs états, sans démarrer l'application. Et une accessibilité résolue une fois, dans les molécules : relations ARIA, gestion du focus, états, au lieu d'être réinventée page par page.
+
+Ce que cela coûte : plusieurs dizaines de fichiers avant que la première page ne s'affiche, même pour un système modeste. De l'indirection, puisque comprendre le rendu d'une page demande désormais d'ouvrir quatre ou cinq fichiers, et que le lecteur perd la vue d'ensemble du gabarit monolithique. Une tentation permanente d'anticiper des variantes qui ne serviront jamais. Et une discipline continue : sans contrôle automatisé, la loi de dépendance descendante se dégrade en quelques mois.
+
+Utilisez-le quand l'application compte de nombreux écrans partageant un vocabulaire visuel, ce qui couvre la plupart des SaaS, back-offices et sites e-commerce. Utilisez-le quand plusieurs développeurs front, ou plusieurs équipes, travaillent sur un même produit. Utilisez-le sur des produits destinés à durer des années, où le design évolue par refontes successives. Et utilisez-le là où la cohérence visuelle est contractuelle ou réglementaire : une charte de marque stricte, ou un logiciel médical où l'ergonomie fait partie de l'analyse de risque.
+
+Passez votre chemin pour un site vitrine de quelques pages, où le système coûterait plus cher que les pages qu'il sert, et pour un prototype jetable, où la vitesse prime et où l'on extraira un système plus tard. Passez votre chemin si un design system tiers est déjà en place : avec Vuetify, Bootstrap ou une bibliothèque maison, vos atomes existent, démarrez au niveau molécule. Recréer un `<AButton>` par-dessus un composant tiers est de la ré-abstraction et rien d'autre. Et passez votre chemin pour une interface unique et fortement spécialisée, comme un tableau de bord temps réel d'un seul écran, qui n'a rien à mutualiser avec quoi que ce soit.
+
+---
+
+## Conclusion
+
+Hiérarchiser l'interface en niveaux de spécificité croissante, et forcer les dépendances à ne pointer que vers le bas, nous a rapporté quatre choses.
+
+Le bouton primaire existe désormais en un seul exemplaire, donc changer son rayon de bordure revient à modifier un fichier au lieu de vingt-trois. Chaque niveau se rend en isolation, en quelques millisecondes, sans base de données ni navigateur. Le même système est parti en Twig et en Vue avec une structure identique, ce qui dit que le modèle décrit une architecture plutôt qu'un framework. Et designers et développeurs désignent enfin les mêmes objets par les mêmes noms.
 
 Reprenons le chemin parcouru :
 
@@ -1191,6 +1155,6 @@ Reprenons le chemin parcouru :
 | Ajouter une page similaire | Copier-coller 200 lignes | Assembler 6 organismes |
 | Vérifier l'architecture | Revue de code, à l'œil | Lint bloquant en CI |
 
-L'Atomic Design demande plus de fichiers et une discipline supérieure au départ. En retour, il transforme une interface — l'actif logiciel qui se dégrade traditionnellement le plus vite — en un système dont la valeur s'accumule au lieu de s'éroder.
+L'Atomic Design demande plus de fichiers et plus de discipline au départ. En retour, l'interface, l'actif logiciel qui se dégrade traditionnellement le plus vite, devient un système dont la valeur s'accumule au lieu de s'éroder.
 
-Et si le raisonnement vous a paru familier, ce n'est pas un hasard : c'est le même que celui de [l'architecture hexagonale](/posts/hexagonal-architecture-fr). Identifier ce qui est stable, l'isoler de ce qui est volatile, et faire pointer les dépendances vers le stable. Les atomes sont au design ce que le domaine est au métier.
+Si le raisonnement vous a paru familier, ce n'est pas un hasard. C'est le même que celui de [l'architecture hexagonale](/posts/hexagonal-architecture-fr) : identifier ce qui est stable, l'isoler de ce qui est volatile, et faire pointer les dépendances vers le stable. Les atomes sont au design ce que le domaine est au métier.
