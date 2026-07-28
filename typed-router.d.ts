@@ -185,6 +185,20 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/posts/atomic-design': RouteRecordInfo<
+      '/posts/atomic-design',
+      '/posts/atomic-design',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/posts/atomic-design-fr': RouteRecordInfo<
+      '/posts/atomic-design-fr',
+      '/posts/atomic-design-fr',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/posts/binfe-2020-zh': RouteRecordInfo<
       '/posts/binfe-2020-zh',
       '/posts/binfe-2020-zh',
@@ -929,6 +943,18 @@ declare module 'vue-router/auto-routes' {
     'pages/posts/async-with-composition-api.md': {
       routes:
         | '/posts/async-with-composition-api'
+      views:
+        | never
+    }
+    'pages/posts/atomic-design.md': {
+      routes:
+        | '/posts/atomic-design'
+      views:
+        | never
+    }
+    'pages/posts/atomic-design-fr.md': {
+      routes:
+        | '/posts/atomic-design-fr'
       views:
         | never
     }
