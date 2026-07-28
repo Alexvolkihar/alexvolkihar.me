@@ -8,6 +8,10 @@ description: A comprehensive, progressive guide to understanding, implementing, 
 
 > [Version Française](/posts/atomic-design-fr)
 
+> Slides: [SPA](https://slides.alexvolkihar.ovh/2026/atomic-design/) (French only)
+>
+> Made with <Slidev class="inline"/> [**Slidev**](https://github.com/slidevjs/slidev) - presentation slides for developers.
+
 [[toc]]
 
 The user interface is often the most mistreated layer of an application. We ship fast, under pressure, duplicating a block of markup "just for this page", adding a utility class "just for this case". Six months later, the design team asks to change the border radius of buttons. That is when we discover there are fourteen different implementations of the primary button, spread across twenty-three files, with seven slightly distinct shades of blue.

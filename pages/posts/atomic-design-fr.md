@@ -8,6 +8,10 @@ description: Un guide complet et progressif pour comprendre, implémenter et ma�
 
 > [English Version](/posts/atomic-design)
 
+> Diaporama : [SPA](https://slides.alexvolkihar.ovh/2026/atomic-design/)
+>
+> Réalisé avec <Slidev class="inline"/> [**Slidev**](https://github.com/slidevjs/slidev) - presentation slides for developers.
+
 [[toc]]
 
 L'interface utilisateur est souvent la couche la plus maltraitée d'une application. On y livre vite, sous pression, en dupliquant un bloc de markup « juste pour cette page », en ajoutant une classe utilitaire « juste pour ce cas ». Six mois plus tard, l'équipe design demande de changer le rayon de bordure des boutons. On découvre alors qu'il existe quatorze implémentations différentes du bouton primaire, réparties dans vingt-trois fichiers, avec sept nuances de bleu légèrement distinctes.
