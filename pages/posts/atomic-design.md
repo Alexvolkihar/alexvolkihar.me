@@ -20,15 +20,13 @@ This is the symptom of an interface **without architecture**. Exactly the same p
 
 This is where **Atomic Design** comes in. Formalized by Brad Frost in 2013 and developed in his eponymous book in 2016, this model proposes thinking of an interface not as a collection of pages, but as a **system of components** that are hierarchical, reusable, and testable in isolation.
 
-In this article, we will understand why the "page by page" approach is problematic, explore the five levels of Atomic Design in detail, and put them into practice in parallel on two very different stacks — **Symfony UX Twig Components** on the server and **Vue 3** on the client — to demonstrate that the model really is technology-agnostic.
+What follows starts from that kind of page, walks through the five levels of the model, and then builds the same system twice: once with **Symfony UX Twig Components** on the server, once with **Vue 3** on the client. Doing it twice is the point. It shows the model owes nothing to either framework.
 
 ---
 
-## 1. The Starting Point – The Copy-Paste Interface (Legacy Pain)
+## 1. The starting point: the copy-paste interface
 
-To understand the value of Atomic Design, let's analyze a typical legacy view. Imagine a page listing products, written as a single block.
-
-Here is the kind of template frequently found in many projects:
+Here is a product listing written as a single block. Nothing unusual about it:
 
 ```twig
 {# templates/catalog/list.html.twig #}
@@ -79,11 +77,11 @@ Here is the kind of template frequently found in many projects:
 </section>
 ```
 
-### Why is this code fragile and problematic?
+### Why this template is fragile
 
-At first glance, this template works perfectly. It renders a product grid, handles stock state, and allows adding to the cart. A designer looking at the page in production would find nothing wrong with it.
+It works. It renders the grid, handles stock state, adds to the cart. A designer looking at the page in production would find nothing wrong with it.
 
-Yet from an architectural standpoint, it is debt accruing compound interest. Here is why:
+It is also debt accruing compound interest, for five separate reasons.
 
 #### 1. No single source of truth
 
@@ -93,7 +91,7 @@ The consequence is measurable: the gap between the Figma mockup and production w
 
 #### 2. Duplicated presentation logic
 
-Price formatting (`priceCents / 100`, separators, currency symbol) is repeated everywhere a price appears. The day you add multi-currency or displayed tax, you have to find every occurrence. This is not business logic — it is **presentation logic**, and it deserves the same care.
+Price formatting (`priceCents / 100`, separators, currency symbol) is repeated everywhere a price appears. The day you add multi-currency or displayed tax, you have to find every occurrence. This is not business logic, it is presentation logic, and it deserves the same care.
 
 #### 3. Rendering that cannot be tested or documented in isolation
 
@@ -114,13 +112,13 @@ The designer talks about "the product card" and "the status chip". The code only
 
 ---
 
-## 2. What Is Atomic Design?
+## 2. What is Atomic Design?
 
-The goal of Atomic Design is simple: **stop designing pages, start designing a system**. A page is no longer a unit of design, but the **result** of assembling smaller components, themselves assembled from even smaller ones.
+The goal is to stop designing pages and start designing a system. A page stops being a unit of design and becomes the result of assembling smaller components, themselves assembled from even smaller ones.
 
-Brad Frost borrows his metaphor from chemistry: matter is made of atoms, which bond into molecules, which form organisms. None of these levels is arbitrary — each describes a different degree of complexity and specificity.
+Brad Frost borrows his metaphor from chemistry: matter is made of atoms, which bond into molecules, which form organisms. None of the levels is arbitrary. Each one describes a different degree of complexity and specificity.
 
-### The 5 Levels of Atomic Design
+### The five levels
 
 ```mermaid
 graph LR
@@ -148,11 +146,11 @@ graph LR
 
 #### 1. Atoms
 
-These are the indivisible building blocks of the interface: a button, an input, a label, an icon, a heading. An atom has **no functional meaning on its own** — an input without a label is useless — but it carries the entire visual identity of the product.
+The indivisible building blocks: a button, an input, a label, an icon, a heading. An atom has no functional meaning on its own (an input without a label is useless), yet it carries the entire visual identity of the product.
 
-- They contain **no business logic**.
+- They contain no business logic.
 - They know nothing of the API, the store, or the current route.
-- They are entirely driven by their properties (props/attributes).
+- They are entirely driven by their props or attributes.
 
 #### 2. Molecules
 
@@ -180,9 +178,9 @@ It is also where the robustness of the system gets tested: what happens with a 2
 
 ---
 
-### The Secret: The Downward Dependency Law
+### The downward dependency law
 
-If hexagonal architecture rests entirely on the dependency inversion principle, Atomic Design rests on a rule that is just as simple, and just as frequently violated:
+Hexagonal architecture rests on dependency inversion. Atomic Design rests on a rule that is just as short, and violated just as often:
 
 > [!IMPORTANT]
 > **A component may only compose components of a strictly lower level, and must never know anything about its usage context.**
@@ -206,17 +204,17 @@ This is exactly the same move as in a hexagon: **isolate what is stable from wha
 > [!NOTE]
 > Brad Frost stresses a point that is often forgotten: Atomic Design **is not a linear process**. You do not design all the atoms first, then all the molecules. You constantly navigate between levels, often starting from a page mockup and extracting components from it. The model is a lens, not a sequential methodology.
 
-In the rest of this article, we will refactor our spaghetti template into a clean system, implementing each level **in parallel** in two radically different technologies.
+The rest of the article refactors the spaghetti template into a system, building each level in both technologies side by side.
 
 ---
 
-## 3. Level Zero: Design Tokens
+## 3. Level zero: design tokens
 
-Before even talking about atoms, we must talk about what they are made of. A blue button that hardcodes `#2563eb` is not an atom: it is a magic value in disguise.
+Before atoms, what atoms are made of. A blue button that hardcodes `#2563eb` is not an atom, it is a magic value in disguise.
 
-**Design tokens** are the subatomic particles of the system: the named values for color, spacing, typography, radius, and shadow. They form the contract between design and code.
+Design tokens are the named values for color, spacing, typography, radius, and shadow. They are the contract between design and code.
 
-#### In plain CSS (usable by Twig and Vue alike)
+#### In plain CSS, usable by Twig and Vue alike
 
 ```css
 /* assets/styles/tokens.css */
@@ -257,7 +255,7 @@ Before even talking about atoms, we must talk about what they are made of. A blu
 }
 ```
 
-#### In UnoCSS (Vue side)
+#### In UnoCSS, on the Vue side
 
 ```ts
 // unocss.config.ts
@@ -283,28 +281,22 @@ One important nuance: name your tokens by their **role** (`--color-danger-bg`), 
 
 ---
 
-## 4. In Practice: Atoms
+## 4. In practice: atoms
 
-Let's start the refactoring. Our primary button, rewritten fourteen times, is going to become a single atom.
+Time to refactor. That primary button, rewritten fourteen times, becomes one atom.
 
 ### Rules for designing an atom
 
-An atom **must**:
-- Only expose properties describing its **appearance** and its **state**, never its context.
-- Consume design tokens exclusively.
-- Emit events rather than act (`click`, not `addToCart`).
+An atom may only expose properties describing its appearance and its state, never its context. It consumes design tokens and nothing else. And it emits events rather than acting on them: `click`, not `addToCart`.
 
-An atom **must never**:
-- Carry external margin — positioning belongs to the parent.
-- Access a store, a route, or an API.
-- Bear a business name (`CheckoutButton` is a bad atom name).
+An atom never carries external margin, never touches a store, a route, or an API, and never bears a business name. `CheckoutButton` is a bad atom name.
 
 > [!IMPORTANT]
-> The **no external margin** rule is the most frequently violated, and the most expensive. An atom declaring `margin-bottom: 16px` imposes its layout on every parent. The day you place it in a horizontal toolbar, you end up fighting `margin-bottom: 0 !important`. *Internal* padding belongs to the atom; spacing *between* elements belongs to the container (ideally via `gap`).
+> The no-external-margin rule is the most frequently violated, and the most expensive. An atom declaring `margin-bottom: 16px` imposes its layout on every parent. The day you place it in a horizontal toolbar, you end up fighting `margin-bottom: 0 !important`. *Internal* padding belongs to the atom; spacing *between* elements belongs to the container, ideally via `gap`.
 
-### Symfony implementation: the anonymous Twig component
+### Symfony: the anonymous Twig component
 
-Symfony UX Twig Components lets you declare a component without any PHP class as long as it has no logic. That is exactly the case for an atom.
+Symfony UX Twig Components lets you declare a component with no PHP class at all as long as it has no logic. That is exactly an atom's situation.
 
 ```twig
 {# templates/components/Atom/Button.html.twig #}
@@ -343,9 +335,9 @@ Usage:
 <twig:Atom:Button type="submit">Confirm</twig:Atom:Button>
 ```
 
-Note `{{ attributes.defaults({...}) }}`: this is the mechanism that lets the parent pass `data-*`, `aria-*`, or Stimulus attributes without the atom needing to know about them. It is a crucial extensibility point — without it, every new need would add a prop to the atom.
+Note `{{ attributes.defaults({...}) }}`. That is what lets the parent pass `data-*`, `aria-*`, or Stimulus attributes without the atom knowing they exist. Without it, every new requirement would add another prop to the atom.
 
-### Vue 3 implementation: the same atom as an SFC
+### Vue 3: the same atom as an SFC
 
 ```vue
 <!-- src/components/atoms/AButton.vue -->
@@ -392,9 +384,9 @@ Usage:
 ```
 
 > [!NOTE]
-> Notice that both implementations are **structurally identical**: same props, same variants, same classes, same slot. Only the syntax differs. This is the proof that Atomic Design describes an architecture, not a technology. A team migrating from Twig to Vue (or the reverse) migrates component by component without rethinking the system.
+> Both implementations are structurally identical: same props, same variants, same classes, same slot. Only the syntax differs. Atomic Design describes an architecture, not a technology, which is why a team moving from Twig to Vue can migrate component by component without rethinking the system.
 
-### A second atom: the Badge
+### A second atom: the badge
 
 ```twig
 {# templates/components/Atom/Badge.html.twig #}
@@ -432,17 +424,17 @@ const tones = {
 </template>
 ```
 
-Note the naming: `tone="danger"`, not `color="red"`. The atom exposes a **semantic intent**, not a visual value. The day design decides "danger" becomes orange, no caller changes.
+Note the naming: `tone="danger"`, not `color="red"`. The atom exposes an intent, not a visual value. The day design decides "danger" becomes orange, no caller changes.
 
 ---
 
-## 5. Molecules: Assembling for a Task
+## 5. Molecules: assembling for a task
 
-A molecule combines atoms to accomplish **one single thing**. This is the most reliable test to distinguish a molecule from an organism: if you cannot describe its role in one sentence without using "and", it is probably an organism.
+A molecule combines atoms to accomplish one thing. That is also the most reliable test for telling a molecule from an organism: if you cannot describe its role in one sentence without saying "and", it is probably an organism.
 
-### `StockBadge`: from raw data to visual intent
+### `StockBadge`, from raw data to visual intent
 
-Our legacy template contained an `if/else` on stock, duplicated everywhere. That is a molecule: it translates data into a visual representation.
+The legacy template had an `if/else` on stock, duplicated everywhere. That is a molecule: it translates data into a visual representation.
 
 ```twig
 {# templates/components/Molecule/StockBadge.html.twig #}
@@ -471,9 +463,9 @@ const { stock } = defineProps<{ stock: number }>()
 ```
 
 > [!TIP]
-> The `> 10` threshold is a **business rule** that has crept into a molecule. In a rigorous system, that computation belongs to the domain, and the molecule should receive an already-determined status (`status: 'in_stock' | 'low' | 'out'`). This is a very common pragmatic trade-off: tolerable for a trivial display rule, to be refused as soon as the threshold becomes configurable or customer-dependent.
+> The `> 10` threshold is a business rule that has crept into a molecule. Strictly, that computation belongs to the domain, and the molecule should receive an already-determined status (`status: 'in_stock' | 'low' | 'out'`). It is a common pragmatic trade-off: tolerable for a trivial display rule, worth refusing as soon as the threshold becomes configurable or customer-dependent.
 
-### `PriceTag`: centralizing formatting
+### `PriceTag`, centralizing formatting
 
 ```twig
 {# templates/components/Molecule/PriceTag.html.twig #}
@@ -507,9 +499,9 @@ const formatted = computed(() =>
 </template>
 ```
 
-Currency formatting now exists **in exactly one place** per stack. Adding a currency, changing the locale, or displaying "excl./incl. tax" happens in a single file.
+Currency formatting now exists in exactly one place per stack. Adding a currency, changing the locale, or displaying "excl./incl. tax" happens in a single file.
 
-### `FormField`: the textbook case
+### `FormField`, the textbook case
 
 ```vue
 <!-- src/components/molecules/MFormField.vue -->
@@ -543,17 +535,17 @@ const describedBy = computed(() =>
 </template>
 ```
 
-This molecule illustrates a responsibility only this level can carry: **relational accessibility**. The link between the label and the field (`for`/`id`), and between the field and its error message (`aria-describedby`), only exists at assembly time. No atom can handle it alone.
+This molecule carries a responsibility only this level can carry: relational accessibility. The link between label and field (`for`/`id`), and between field and error message (`aria-describedby`), only exists at assembly time. No atom can handle it alone.
 
-This is an often underrated argument in favor of Atomic Design: correct accessibility is **structurally impossible** to guarantee in a system where every page reassembles its fields by hand. Centralized in a molecule, it is earned once and for all.
+That is an underrated argument for the whole model. Correct accessibility is structurally impossible to guarantee in a system where every page reassembles its fields by hand. Centralized in a molecule, it is earned once.
 
 ---
 
-## 6. Organisms: Business Enters the Scene
+## 6. Organisms: business enters the scene
 
-An organism is a self-contained section of the interface. It is the first level allowed to know the **shape** of business data.
+An organism is a self-contained section of the interface. It is the first level allowed to know the shape of business data.
 
-### The `ProductCard`
+### `ProductCard`
 
 ```twig
 {# templates/components/Organism/ProductCard.html.twig #}
@@ -625,15 +617,13 @@ const emit = defineEmits<{ addToCart: [productId: string] }>()
 </template>
 ```
 
-Two architectural details deserve attention:
+Two details are worth stopping on.
 
-**1. The organism does not trigger the action, it signals it.** On the Vue side it emits `addToCart`; on the Twig side it delegates to a Stimulus controller via attributes. In both cases, the organism is completely unaware that `/api/cart/add` exists. It stays renderable in documentation, a test, or a mockup without any backend running.
+The organism does not trigger the action, it signals it. On the Vue side it emits `addToCart`; on the Twig side it delegates to a Stimulus controller through attributes. Either way the organism has no idea `/api/cart/add` exists, so it stays renderable in documentation, in a test, or in a mockup with no backend running. That is the hexagon's dependency inversion moved to the interface: the component declares what it needs, the caller supplies the implementation.
 
-This is precisely the hexagon's dependency inversion, transposed to the interface: **the component declares what it needs, the caller supplies the implementation.**
+The only `margin` in the file is `mt-auto` on the button, and it is legitimate, because the card is the parent deciding to push its own button to the bottom. The no-external-margin rule governs a component's relationship with *its* parent, not what happens inside its own boundaries.
 
-**2. The only `margin` in the file is `mt-auto` on the button** — and it is legitimate, because it is the parent (the card) that decides to push its button to the bottom. The "no external margin" rule applies to a component with respect to *its* parent, not within its own boundaries.
-
-### The `ProductGrid`
+### `ProductGrid`
 
 ```vue
 <!-- src/components/organisms/OProductGrid.vue -->
@@ -669,13 +659,13 @@ defineEmits<{ addToCart: [productId: string] }>()
 </template>
 ```
 
-This organism carries a responsibility the page should not have to repeat: **the three states of a collection** (loading, empty, populated). In the legacy code, the empty and loading states simply did not exist — they showed up as a blank page. By encoding them in the organism, they become impossible to forget.
+This organism carries something the page should not have to repeat: the three states of a collection, loading, empty, and populated. In the legacy code the empty and loading states simply did not exist. They showed up as a blank page. Encoded in the organism, they become impossible to forget.
 
 ---
 
-## 7. Templates and Pages: Structure, Then Data
+## 7. Templates and pages: structure, then data
 
-### The Template: layout without content
+### The template: layout without content
 
 ```vue
 <!-- src/components/templates/TCatalogLayout.vue -->
@@ -701,9 +691,9 @@ This organism carries a responsibility the page should not have to repeat: **the
 </template>
 ```
 
-This file contains **no data, no imports, no logic**. It only describes zones and their responsive behavior. You can validate it with gray blocks before the first organism even exists.
+This file contains no data, no imports, no logic. It describes zones and their responsive behavior, nothing else. You can validate it with gray blocks before the first organism even exists.
 
-The Twig equivalent relies on blocks, a native language mechanism:
+The Twig equivalent uses blocks, which the language already provides:
 
 ```twig
 {# templates/components/Template/CatalogLayout.html.twig #}
@@ -727,7 +717,7 @@ The Twig equivalent relies on blocks, a native language mechanism:
 </div>
 ```
 
-### The Page: the only point of contact with the outside world
+### The page: the only point of contact with the outside world
 
 ```vue
 <!-- pages/catalog.vue -->
@@ -767,15 +757,15 @@ useHead({ title: 'Catalog — Our products' })
 </template>
 ```
 
-The page has become a **wiring file**. It no longer contains a single CSS class, a single `if`, a single formatting call. It merely plugs real data into an existing structure — exactly like an infrastructure controller plugs an HTTP request into a use case.
+The page has become a wiring file. Not one CSS class, not one `if`, not one formatting call. It plugs real data into an existing structure, the same way an infrastructure controller plugs an HTTP request into a use case.
 
-Compare with the template from chapter 1: we went from 45 lines mixing inline styles, formatting, conditional logic, and network calls, to a declaration readable at a glance.
+Compare it with the template from chapter 1. Forty-five lines of inline styles, formatting, conditionals, and network calls became a declaration you can read at a glance.
 
 ---
 
-## 8. In Practice: Directory Structure and Conventions
+## 8. Directory structure and conventions
 
-### Directory Structure
+### Directory structure
 
 #### Symfony side
 
@@ -829,9 +819,9 @@ pages/
 └── catalog.vue               <-- The "Page" level, handled by the router
 ```
 
-The single-letter prefix (`A`/`M`/`O`/`T`) is a debated convention. Its decisive advantage: **a component's level is visible at its usage site**, without opening a file. Reading `<OProductCard>` inside `AButton.vue` immediately signals a violation, by eye, in code review.
+The single-letter prefix (`A`/`M`/`O`/`T`) is a debated convention. Its advantage is that a component's level is visible where it is used, without opening a file. Reading `<OProductCard>` inside `AButton.vue` signals a violation by eye, during review.
 
-Its drawback: renaming a component that changes level touches every caller. That is precisely what you want — a level change *is* an architectural change, and it deserves to be visible.
+Its drawback is that renaming a component whose level changes touches every caller. That is precisely what you want. A level change *is* an architectural change, and it deserves to be visible.
 
 ### Naming conventions
 
@@ -842,19 +832,17 @@ Its drawback: renaming a component that changes level touches every caller. That
 | Organism | Its business concept | `ProductCard`, `SiteHeader` | `Section2`, `BigBox` |
 | Template | Its layout | `CatalogLayout`, `ArticleLayout` | `Page1`, `MainTemplate` |
 
-The underlying rule: **a component's name must reflect its level of abstraction**. An atom named `CheckoutButton` is an admission that it knows its context, therefore that it is not reusable, therefore that it is not an atom.
+The underlying rule is that a component's name must reflect its level of abstraction. An atom named `CheckoutButton` is an admission that it knows its context, therefore that it is not reusable, therefore that it is not an atom.
 
 ---
 
-## 9. Mastering Atomic Design (Advanced Concepts)
-
-Once the foundations are laid, the model unlocks its potential through practices that guarantee the integrity of the system over the long run.
+## 9. Going further
 
 ### Testing components in isolation
 
-Decoupling components from their context makes possible what was impossible in chapter 1: testing them **without starting the application**.
+Decoupling components from their context makes possible what was impossible in chapter 1: testing them without starting the application.
 
-#### Vue side: Vitest + Testing Library
+#### Vue side: Vitest and Testing Library
 
 ```ts
 // src/components/molecules/MStockBadge.test.ts
@@ -916,13 +904,13 @@ final class ButtonTest extends KernelTestCase
 ```
 
 > [!TIP]
-> These tests run in a few milliseconds and require no database, no browser, no authenticated session. On a fifty-component system, the full suite runs in under three seconds — the feedback loop you need to refactor with confidence.
+> These tests run in a few milliseconds and require no database, no browser, no authenticated session. On a fifty-component system the full suite finishes in under three seconds, which is the feedback loop you need in order to refactor without fear.
 
 ### Documenting: the system's showroom
 
-A design system nobody consults gets reinvented every sprint. Two approaches depending on the stack:
+A design system nobody consults gets reinvented every sprint. Two approaches, depending on the stack.
 
-**On the Vue side**, Storybook (or Histoire) renders each component in all its variants:
+On the Vue side, Storybook (or Histoire) renders each component in all its variants:
 
 ```ts
 // src/components/atoms/AButton.stories.ts
@@ -952,7 +940,7 @@ export const Primary: StoryObj<typeof meta> = {
 export const Disabled: StoryObj<typeof meta> = { args: { disabled: true } }
 ```
 
-**On the Symfony side**, integrating Storybook is possible but heavy. A far more pragmatic approach is to expose a showroom route, restricted to the development environment:
+On the Symfony side, integrating Storybook is possible but heavy. Exposing a showroom route, restricted to the development environment, is far cheaper:
 
 ```php
 <?php
@@ -975,11 +963,11 @@ final class DesignSystemController extends AbstractController
 }
 ```
 
-The associated template renders every atom in all its combinations. It is less rich than Storybook, but it takes an hour to set up, adds no build dependency, and covers 90% of the need: **seeing every state at a glance**.
+The associated template renders every atom in all its combinations. It is poorer than Storybook, but it takes an hour to set up, adds no build dependency, and covers 90% of the need: seeing every state at a glance.
 
 ### Enforcing the architecture automatically
 
-The downward dependency law does not survive delivery pressure if it is only checked by code review. As with a hexagon, it must be made **blocking in CI**.
+The downward dependency law does not survive delivery pressure if code review is the only thing checking it. As with a hexagon, it has to be blocking in CI.
 
 #### TypeScript side: `eslint-plugin-boundaries`
 
@@ -1020,7 +1008,7 @@ Any attempt to import an organism from an atom now fails the lint, and therefore
 
 #### PHP side: Deptrac, with an important caveat
 
-Deptrac reasons about **PHP namespaces**. It therefore covers components backed by a class perfectly:
+Deptrac reasons about PHP namespaces, so it covers components backed by a class perfectly:
 
 ```yaml
 # deptrac.yaml
@@ -1047,7 +1035,7 @@ deptrac:
 ```
 
 > [!WARNING]
-> **The limitation to know about:** an *anonymous* Twig component has no PHP class. Its dependency lives in the `<twig:Organism:ProductCard />` tag inside a `.twig` file, completely invisible to Deptrac. And it is precisely the atoms and molecules — the most critical to protect — that are most often anonymous.
+> **The limitation to know about:** an *anonymous* Twig component has no PHP class. Its dependency lives in the `<twig:Organism:ProductCard />` tag inside a `.twig` file, completely invisible to Deptrac. And the atoms and molecules, the ones most critical to protect, are precisely the ones most often anonymous.
 
 A complementary check, trivial but effective, fills the gap:
 
@@ -1087,7 +1075,7 @@ Twenty lines of shell wired into CI beat a convention everyone knows and nobody 
 
 The symptom: a team debating for thirty minutes whether `UserAvatar` is a molecule or an organism.
 
-This is the most frequent trap, and the most sterile. Brad Frost himself repeats it: taxonomy is a **communication tool**, not a science. Adopt a de-escalation rule: past two minutes of debate, place the component at the higher level and move on. A misclassified component costs one file move; a weekly classification meeting costs a project.
+This is the most frequent trap, and the most sterile. Brad Frost himself repeats it: taxonomy is a communication tool, not a science. Adopt a de-escalation rule. Past two minutes of debate, put the component at the higher level and move on. A misclassified component costs one file move; a weekly classification meeting costs a project.
 
 #### 2. The omniscient atom
 
@@ -1100,7 +1088,7 @@ This is the most frequent trap, and the most sterile. Brad Frost himself repeats
 />
 ```
 
-Every edge case added a prop, until the atom became unreadable and untestable — 2²³ theoretical combinations. The remedy is **composition over configuration**: a small set of semantic variants, and slots for everything else.
+Every edge case added a prop, until the atom became unreadable and untestable, with 2²³ theoretical combinations. The remedy is composition over configuration: a small set of semantic variants, and slots for everything else.
 
 ```vue
 <!-- ✅ Variation goes through content, not props -->
@@ -1117,7 +1105,7 @@ A file `MButtonWrapper.vue` whose entire content is `<AButton><slot /></AButton>
 
 #### 4. Prop drilling across levels
 
-Passing `currentUser` from the page down to an atom, through four levels, indicates the decomposition is wrong — or that a context mechanism is needed (`provide`/`inject` in Vue, global context variables in Twig). An atom that needs to know the current user is, by definition, not an atom.
+Passing `currentUser` from the page down to an atom, through four levels, means either the decomposition is wrong or a context mechanism is missing (`provide`/`inject` in Vue, global context variables in Twig). An atom that needs to know the current user is, by definition, not an atom.
 
 #### 5. Premature business naming
 
@@ -1127,59 +1115,35 @@ Passing `currentUser` from the page down to an atom, through four levels, indica
 
 Atomic Design coexists with several neighboring models, and it helps to know which one answers which question.
 
-**Feature-Sliced Design (FSD)** organizes code by *feature* rather than by level of abstraction. The two do not compete: in large applications, you frequently see a **cross-cutting** atomic design system (FSD's `shared/ui` are literally atoms and molecules) with a feature-based split above it. This is probably the most solid combination for a large application.
+Feature-Sliced Design organizes code by *feature* rather than by level of abstraction. The two do not compete. In large applications you frequently see a cross-cutting atomic design system (FSD's `shared/ui` are literally atoms and molecules) with a feature-based split above it, and that is probably the most solid combination at scale.
 
-**ITCSS** answers the same intuition on the CSS side: organize by increasing specificity, from generic to specific. With an atomic engine like UnoCSS or Tailwind, the question largely loses relevance — tokens and component variants replace the cascade.
+ITCSS answers the same intuition on the CSS side: organize by increasing specificity, from generic to specific. With an atomic engine like UnoCSS or Tailwind, the question largely loses relevance, since tokens and component variants replace the cascade.
 
-**Three-level systems.** Many mature teams flatten the model into `primitives / components / features`, merging atoms and molecules on one side, organisms and templates on the other. This is a perfectly defensible choice: the value of the model lies in the **downward dependency law**, not in the exact number of tiers. Five levels on a thirty-component project is ceremony.
-
----
-
-### Trade-offs: When to adopt it and when to avoid it
-
-No architecture is a silver bullet. Atomic Design brings large benefits but introduces real accidental complexity.
-
-#### Advantages
-
-* **Visual consistency guaranteed by construction**: a button has only one definition, therefore only one possible appearance.
-* **Increasing velocity**: the first pages are slower to produce, the following ones increasingly fast, because the vocabulary already exists.
-* **Shared design/development language**: designer and developer name the same thing the same way, removing an entire layer of misunderstanding.
-* **Testability and documentation**: every component renders in isolation, in every state, without starting the application.
-* **Pooled accessibility**: ARIA relationships, focus management, and states are solved once, in the molecules, rather than reinvented page by page.
-
-#### Drawbacks
-
-* **Upfront cost**: even a modest system means dozens of files before the first page renders.
-* **Cost of indirection**: understanding how a page renders requires opening four or five files. The reader loses the overview the monolithic template offered.
-* **Over-abstraction risk**: the temptation to anticipate variants that will never be used is strong, and expensive.
-* **Continuous discipline required**: without automated enforcement, the downward dependency law degrades within months.
-
-#### When to use it?
-
-* Applications with many screens sharing a common visual vocabulary (SaaS, admin panels, e-commerce).
-* Projects involving several front-end developers, or several teams on one product.
-* Products meant to last several years, where design will evolve through successive redesigns.
-* Contexts where visual consistency is contractual or regulatory — a strict brand guideline, or medical software where ergonomics are part of risk analysis.
-
-#### When to avoid it?
-
-* **A few-page brochure site**: the system would cost more than the pages it serves.
-* **Throwaway prototype or MVP**: favor speed, and extract a system once the model is validated.
-* **A third-party design system already in place**: if you use Vuetify, Bootstrap, or an in-house component library, your atoms already exist. Start directly at the molecule level — recreating an `<AButton>` on top of a third-party component is pure re-abstraction.
-* **A single, highly specialized interface**: a one-screen real-time dashboard has nothing to share.
+Then there are three-level systems. Many mature teams flatten the model into `primitives / components / features`, merging atoms with molecules on one side and organisms with templates on the other. Perfectly defensible: the value lies in the downward dependency law, not in the exact number of tiers. Five levels on a thirty-component project is ceremony.
 
 ---
 
-## Conclusion and Comparison
+### When to adopt it, and when not to
 
-By organizing the interface into levels of increasing specificity, and enforcing that dependencies only point downwards, we obtained:
+No architecture is a silver bullet. Atomic Design buys real things and costs real things.
 
-1. **A single source of truth**: the primary button exists in exactly one copy. Changing its border radius means editing one file, not twenty-three.
-2. **Testable and documentable components**: every level renders in isolation, in milliseconds, without a database or a browser.
-3. **Technological independence**: we implemented the same system in Twig and in Vue with an identical structure. The model describes an architecture, not a framework.
-4. **A shared language**: designers and developers finally refer to the same objects by the same names.
+What you get: a button with one definition and therefore one possible appearance. Velocity that starts low and climbs, since the first pages are slow to produce and every one after that is faster, the vocabulary already being there. Designers and developers naming the same thing the same way, which removes an entire layer of misunderstanding. Components that render in isolation, in every state, without starting the app. And accessibility solved once, in the molecules: ARIA relationships, focus management, states, instead of reinvented page by page.
 
-Let's retrace the path:
+What it costs: dozens of files before the first page renders, even for a modest system. Indirection, since understanding how a page renders now means opening four or five files, and the reader loses the overview the monolithic template gave. A standing temptation to anticipate variants that will never be used. And continuous discipline: without automated enforcement, the downward dependency law degrades within months.
+
+Use it when the application has many screens sharing a visual vocabulary, which is most SaaS products, admin panels, and e-commerce. Use it when several front-end developers, or several teams, work on one product. Use it on products meant to last years, where design evolves through successive redesigns. And use it where visual consistency is contractual or regulatory: a strict brand guideline, or medical software where ergonomics are part of the risk analysis.
+
+Skip it for a brochure site of a few pages, where the system costs more than the pages it serves, and for a throwaway prototype, where speed wins and a system can be extracted later. Skip it if a third-party design system is already in place: with Vuetify, Bootstrap, or an in-house library, your atoms exist, so start at the molecule level. Recreating an `<AButton>` on top of a third-party component is re-abstraction and nothing else. And skip it for a single highly specialized interface, like a one-screen real-time dashboard, which has nothing to share with anything.
+
+---
+
+## Conclusion
+
+Organizing the interface into levels of increasing specificity, and forcing dependencies to point downwards, got us four things.
+
+The primary button now exists in exactly one copy, so changing its border radius means editing one file instead of twenty-three. Every level renders in isolation, in milliseconds, with no database and no browser. The same system went into Twig and into Vue with an identical structure, which says the model describes an architecture rather than a framework. And designers and developers finally refer to the same objects by the same names.
+
+Retracing the path:
 
 | | Before (monolithic page) | After (Atomic Design) |
 |---|---|---|
@@ -1191,6 +1155,6 @@ Let's retrace the path:
 | Add a similar page | Copy-paste 200 lines | Assemble 6 organisms |
 | Verify the architecture | Code review, by eye | Blocking lint in CI |
 
-Atomic Design demands more files and greater discipline upfront. In return, it turns the interface — traditionally the fastest-degrading software asset — into a system whose value accumulates instead of eroding.
+Atomic Design demands more files and more discipline upfront. In return, the interface, traditionally the fastest-degrading asset in the codebase, becomes a system whose value accumulates instead of eroding.
 
-And if the reasoning felt familiar, that is no accident: it is the same as [hexagonal architecture](/posts/hexagonal-architecture). Identify what is stable, isolate it from what is volatile, and make dependencies point towards the stable. Atoms are to design what the domain is to business.
+If the reasoning felt familiar, that is no accident. It is the same as [hexagonal architecture](/posts/hexagonal-architecture): identify what is stable, isolate it from what is volatile, and make the dependencies point towards the stable. Atoms are to design what the domain is to business.
