@@ -2,11 +2,12 @@
 title: "Maîtriser l'Atomic Design : Du Copier-Coller au Design System"
 date: 2026-07-28T00:00:00Z
 lang: fr
+art: random
 duration: 18min
 description: Un guide complet et progressif pour comprendre, implémenter et maîtriser l'Atomic Design, illustré en parallèle avec Symfony UX Twig Components et Vue 3.
 ---
 
-> [English Version](/posts/atomic-design)
+> [English Version](/posts/atomic-design) · [日本語版](/posts/atomic-design-ja)
 
 > Diaporama : [SPA](https://slides.alexvolkihar.ovh/2026/atomic-design/)
 >

@@ -199,6 +199,13 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/posts/atomic-design-ja': RouteRecordInfo<
+      '/posts/atomic-design-ja',
+      '/posts/atomic-design-ja',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/posts/binfe-2020-zh': RouteRecordInfo<
       '/posts/binfe-2020-zh',
       '/posts/binfe-2020-zh',
@@ -349,6 +356,13 @@ declare module 'vue-router/auto-routes' {
     '/posts/hexagonal-architecture-fr': RouteRecordInfo<
       '/posts/hexagonal-architecture-fr',
       '/posts/hexagonal-architecture-fr',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/posts/hexagonal-architecture-ja': RouteRecordInfo<
+      '/posts/hexagonal-architecture-ja',
+      '/posts/hexagonal-architecture-ja',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -552,6 +566,13 @@ declare module 'vue-router/auto-routes' {
     '/posts/photos-page': RouteRecordInfo<
       '/posts/photos-page',
       '/posts/photos-page',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/posts/photos-page-fr': RouteRecordInfo<
+      '/posts/photos-page-fr',
+      '/posts/photos-page-fr',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -958,6 +979,12 @@ declare module 'vue-router/auto-routes' {
       views:
         | never
     }
+    'pages/posts/atomic-design-ja.md': {
+      routes:
+        | '/posts/atomic-design-ja'
+      views:
+        | never
+    }
     'pages/posts/binfe-2020-zh.md': {
       routes:
         | '/posts/binfe-2020-zh'
@@ -1087,6 +1114,12 @@ declare module 'vue-router/auto-routes' {
     'pages/posts/hexagonal-architecture-fr.md': {
       routes:
         | '/posts/hexagonal-architecture-fr'
+      views:
+        | never
+    }
+    'pages/posts/hexagonal-architecture-ja.md': {
+      routes:
+        | '/posts/hexagonal-architecture-ja'
       views:
         | never
     }
@@ -1261,6 +1294,12 @@ declare module 'vue-router/auto-routes' {
     'pages/posts/photos-page.md': {
       routes:
         | '/posts/photos-page'
+      views:
+        | never
+    }
+    'pages/posts/photos-page-fr.md': {
+      routes:
+        | '/posts/photos-page-fr'
       views:
         | never
     }

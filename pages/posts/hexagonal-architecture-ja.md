@@ -1,31 +1,31 @@
 ---
-title: "Mastering Hexagonal Architecture: From Spaghetti to Clean Code in PHP"
+title: "ヘキサゴナルアーキテクチャ入門：PHPでスパゲッティコードからクリーンなコードへ"
 date: 2026-07-06T00:00:00Z
-lang: en
+lang: ja
 art: random
 duration: 15min
-description: A comprehensive, progressive guide to understanding, implementing, and mastering hexagonal architecture in PHP through a practical refactoring example.
+description: PHPによる実践的なリファクタリング例を通して、ヘキサゴナルアーキテクチャの理解・実装・習得を段階的に進める総合ガイド。
 ---
 
-> [Version Française](/posts/hexagonal-architecture-fr) · [日本語版](/posts/hexagonal-architecture-ja)
+> [English Version](/posts/hexagonal-architecture) · [Version Française](/posts/hexagonal-architecture-fr)
 
-> Slides: [SPA](https://slides.alexvolkihar.ovh/2026/hexagonal-architecture/) (French only)
+> スライド: [SPA](https://slides.alexvolkihar.ovh/2026/hexagonal-architecture/)（フランス語のみ）
 >
-> Made with <Slidev class="inline"/> [**Slidev**](https://github.com/slidevjs/slidev) - presentation slides for developers.
+> <Slidev class="inline"/> [**Slidev**](https://github.com/slidevjs/slidev) で作成 - presentation slides for developers.
 
 [[toc]]
 
-Architecture usually loses to the deadline in the first months of a project. You reach for an all-in-one framework, ship features, and move on. The bill arrives later: maintenance gets expensive, regressions pile up, and the business rules end up welded to the database, to third-party libraries, and to the framework itself.
+プロジェクトの最初の数ヶ月、アーキテクチャは大抵の場合、締切に負ける。オールインワンのフレームワークを選び、機能をリリースし、そのまま前に進む。ツケは後になって回ってくる――保守コストは膨らみ、リグレッションは積み重なり、ビジネスロジックはデータベースやサードパーティライブラリ、そしてフレームワーク自体にがっちり溶接されてしまう。
 
-**Hexagonal Architecture** (also called *Ports & Adapters*) is one answer to that. Alistair Cockburn described it in 2005: structure the application so that the business logic never touches infrastructure details.
+**ヘキサゴナルアーキテクチャ**（*ポート＆アダプター*とも呼ばれる）は、この問題への一つの答えだ。Alistair Cockburnが2005年に提唱したもので、要はビジネスロジックがインフラの詳細に一切触れないようにアプリケーションを構造化する、という考え方だ。
 
-What follows starts from a coupled controller, works through what the pattern actually asks of you, and rebuilds that controller layer by layer.
+以下では、密結合したコントローラーから出発し、このパターンが実際に何を要求するのかを一つずつ確認しながら、そのコントローラー層を段階的に作り直していく。
 
 ---
 
-## 1. The starting point: coupled code
+## 1. 出発点：密結合したコード
 
-Here is a PHP controller handling user registration. Nothing exotic, and probably close to something you have written or inherited:
+ユーザー登録を処理するPHPのコントローラーを見てみよう。特に変わったところはなく、おそらく皆さんが書いたことがある、あるいは引き継いだことのあるコードに近いはずだ。
 
 ```php
 <?php
@@ -93,37 +93,37 @@ class RegistrationController extends Controller
 }
 ```
 
-### Why this code is fragile
+### このコードが脆い理由
 
-The controller works. It validates input, saves to the database, sends a welcome email, and returns JSON. The trouble only shows up the day something has to change.
+このコントローラーはちゃんと動く。入力を検証し、DBに保存し、ウェルカムメールを送り、JSONを返す。問題が表面化するのは、何かを変更しなければならなくなった日だ。
 
-#### 1. It violates SOLID on three counts
+#### 1. SOLIDを3点で破っている
 
-**SRP.** `RegistrationController` handles HTTP serialization, input validation, a business rule (password hashing), database access through Eloquent, SMTP configuration, and response formatting. Any change to any of those means editing this class.
+**SRP。** `RegistrationController` は、HTTPのシリアライズ、入力バリデーション、ビジネスルール（パスワードのハッシュ化）、Eloquent経由のDBアクセス、SMTP設定、レスポンスのフォーマットを一手に引き受けている。このどれか一つを変更するだけで、このクラスを編集することになる。
 
-**OCP.** Switching from PHPMailer to Mailgun, Brevo, or AWS SES means opening the class and rewriting its guts. Same story if the users move behind an identity microservice instead of a MySQL table.
+**OCP。** PHPMailerからMailgun、Brevo、AWS SESに乗り換えるには、クラスを開いて中身を書き換える必要がある。ユーザー管理がMySQLのテーブルから認証マイクロサービスに移る場合も同じことが起きる。
 
-**DIP.** The high-level operation, registering a user, depends directly on the low-level details: Eloquent for MySQL, PHPMailer for SMTP. The business code has no say in either choice.
+**DIP。** 「ユーザーを登録する」という高レベルの操作が、MySQL用のEloquentやSMTP用のPHPMailerといった低レベルの詳細に直接依存している。ビジネスコードはどちらの選択にも口出しできない。
 
-#### 2. You cannot unit test it
+#### 2. ユニットテストができない
 
-To exercise the user-creation logic you need a real database (or a pile of Laravel mocks intercepting Eloquent queries), plus a real SMTP server, or Mailtrap, or aggressive mocking of PHPMailer's globals.
+ユーザー作成ロジックを動かすには、本物のデータベース（あるいはEloquentのクエリをインターセプトする大量のLaravelモック）に加えて、本物のSMTPサーバー、もしくはMailtrap、あるいはPHPMailerのグローバル変数を力技でモックする仕組みが必要になる。
 
-There is no way to run the registration rules on their own in a test that finishes in a millisecond. The tests you do write end up slow and easy to break.
+登録ルールだけを1ミリ秒で終わるテストとして単独で実行する方法はない。結局書くことになるテストは遅く、壊れやすい。
 
-#### 3. It is welded to the framework
+#### 3. フレームワークに溶接されている
 
-`Request`, `Response`, Eloquent, the `env()` helper: the business code is Laravel code. Move the same logic to Symfony, to a CLI command, or to an async worker, and almost nothing survives the move.
+`Request`、`Response`、Eloquent、`env()`ヘルパー――このビジネスコードは事実上Laravelのコードだ。同じロジックをSymfonyやCLIコマンド、非同期ワーカーに移そうとしても、ほとんど何も生き残らない。
 
 ---
 
-## 2. What is hexagonal architecture?
+## 2. ヘキサゴナルアーキテクチャとは何か
 
-The goal is to isolate the business code from everything above. The application becomes a closed system, the "application core", and it talks to the outside world only through contracts it defines itself.
+目的は、ビジネスコードをそれ以外のすべてから切り離すことにある。アプリケーションは閉じたシステム、いわば「アプリケーションコア」になり、外の世界とは自分自身が定義した契約を通してのみやり取りする。
 
-### The four parts
+### 4つの構成要素
 
-The project splits into layers arranged around the domain and the application:
+プロジェクトは、ドメインとアプリケーションを中心に配置された層に分割される。
 
 ```mermaid
 graph TD
@@ -133,32 +133,32 @@ graph TD
     classDef adapter fill:#a9f9bf,stroke:#333,stroke-width:2px;
     classDef port fill:#f9efa9,stroke:#333,stroke-dasharray: 5 5,stroke-width:2px;
 
-    subgraph Hexagon ["Application Core (Hexagon)"]
-        subgraph DomainLayer ["Domain Layer"]
-            DomainModel["Entities & Business Logic"]
+    subgraph Hexagon ["アプリケーションコア（ヘキサゴン）"]
+        subgraph DomainLayer ["ドメイン層"]
+            DomainModel["エンティティ & ビジネスロジック"]
         end
-        subgraph AppLayer ["Application Layer"]
-            UseCase["Use Cases"]
-            InPort["Inbound Ports"]
-            OutPort["Outbound Ports"]
+        subgraph AppLayer ["アプリケーション層"]
+            UseCase["ユースケース"]
+            InPort["インバウンドポート"]
+            OutPort["アウトバウンドポート"]
         end
     end
 
-    subgraph Infrastructure ["Infrastructure (Technical Details)"]
-        HTTPController["Inbound Adapter (HTTP Controller)"]
-        ConsoleCLI["Inbound Adapter (CLI Command)"]
-        Database["Outbound Adapter (Doctrine / Eloquent Repository)"]
-        EmailService["Outbound Adapter (SMTP / Brevo Mailer)"]
+    subgraph Infrastructure ["インフラストラクチャ（技術的詳細）"]
+        HTTPController["インバウンドアダプター（HTTPコントローラー）"]
+        ConsoleCLI["インバウンドアダプター（CLIコマンド）"]
+        Database["アウトバウンドアダプター（Doctrine / Eloquentリポジトリ）"]
+        EmailService["アウトバウンドアダプター（SMTP / Brevoメーラー）"]
     end
 
     %% Execution flow and dependencies
-    HTTPController -->|Calls| InPort
-    ConsoleCLI -->|Calls| InPort
-    UseCase -.->|Implements| InPort
-    UseCase -->|Manipulates| DomainModel
-    UseCase -->|Calls| OutPort
-    Database -.->|Implements| OutPort
-    EmailService -.->|Implements| OutPort
+    HTTPController -->|呼び出す| InPort
+    ConsoleCLI -->|呼び出す| InPort
+    UseCase -.->|実装| InPort
+    UseCase -->|操作する| DomainModel
+    UseCase -->|呼び出す| OutPort
+    Database -.->|実装| OutPort
+    EmailService -.->|実装| OutPort
 
     class DomainModel domain;
     class UseCase application;
@@ -166,60 +166,60 @@ graph TD
     class HTTPController,ConsoleCLI,Database,EmailService adapter;
 ```
 
-#### 1. The domain
+#### 1. ドメイン
 
-The centre of the hexagon: entities, value objects, domain services.
+ヘキサゴンの中心。エンティティ、値オブジェクト、ドメインサービスがここに置かれる。
 
-- It holds the business rules. A user must have a valid email; a password must meet a strength requirement.
-- It has **no external dependencies**. It knows nothing about the framework, the database, PHPMailer, or HTTP. Plain old PHP objects, nothing more.
+- ビジネスルールを保持する。ユーザーは有効なメールアドレスを持たなければならない、パスワードは一定の強度基準を満たさなければならない、といった具合だ。
+- **外部依存を一切持たない**。フレームワーク、データベース、PHPMailer、HTTPについて何も知らない。ただのPHPオブジェクト、それ以上でもそれ以下でもない。
 
-#### 2. The application layer
+#### 2. アプリケーション層
 
-This is where the control flow lives, in use cases (some people call them application services).
+制御フローが実際に生きる場所で、ユースケース（アプリケーションサービスと呼ぶ人もいる）として表現される。
 
-- A use case is one action a user or another system can take, such as `RegisterUser`.
-- It takes a request, coordinates domain entities, and reaches the outside world only through interfaces: saving to a database, sending an email.
+- ユースケースとは、ユーザーや他のシステムが実行できる一つのアクションのことで、例えば `RegisterUser` がそれにあたる。
+- リクエストを受け取り、ドメインエンティティを協調させ、外の世界にはインターフェース越しにしか触れない――DBへの保存、メール送信など。
 
-#### 3. The ports
+#### 3. ポート
 
-Ports are the boundary. They are PHP `interface` declarations that say how the core talks to everything else, and they come in two flavors.
+ポートは境界線そのものだ。コアが外部とどうやり取りするかを定めるPHPの `interface` であり、2種類に分かれる。
 
-Inbound ports (also called driving ports) say how the outside can trigger something in the core; `RegisterUserInterface` would be one. Outbound ports (driven ports) say what the core needs in order to finish its job, without saying how: `UserRepositoryInterface` to store a user, `MailerInterface` to send the email.
+インバウンドポート（ドライビングポートとも呼ばれる）は、外部がコア内の何かをどうやってトリガーできるかを示す。`RegisterUserInterface` はその一例だ。アウトバウンドポート（ドリブンポート）は、コアが処理を完了するために何を必要としているかを示すが、どうやってそれを提供するかは規定しない――ユーザーを保存するための `UserRepositoryInterface`、メールを送るための `MailerInterface` などがそれにあたる。
 
-#### 4. The adapters
+#### 4. アダプター
 
-Adapters live outside the hexagon, in the infrastructure layer, and translate between a technology and a port.
+アダプターはヘキサゴンの外側、インフラ層に存在し、あるテクノロジーとポートの間を橋渡しする。
 
-Inbound adapters take a stimulus from the outside and turn it into a call on an inbound port: a Laravel HTTP controller, a Symfony console command, a RabbitMQ consumer. Outbound adapters implement the outbound ports and do the technical work: `EloquentUserRepository` implementing `UserRepositoryInterface`, `BrevoMailer` implementing `MailerInterface`, or `InMemoryUserRepository`, which exists only for tests.
+インバウンドアダプターは外部からの刺激を受け取り、それをインバウンドポートへの呼び出しに変換する――LaravelのHTTPコントローラー、Symfonyのコンソールコマンド、RabbitMQのコンシューマーなどだ。アウトバウンドアダプターはアウトバウンドポートを実装し、実際の技術的な作業を行う――`UserRepositoryInterface` を実装する `EloquentUserRepository`、`MailerInterface` を実装する `BrevoMailer`、そしてテストのためだけに存在する `InMemoryUserRepository` などがそれにあたる。
 
 ---
 
-### The dependency inversion principle
+### 依存性逆転の原則
 
-All of this rests on one principle.
+これらすべては、たった一つの原則の上に成り立っている。
 
-In a traditional layered application, each layer depends on the one below it: controller, then service, then database through the ORM.
+従来のレイヤードアーキテクチャでは、各層はその下の層に依存する――コントローラー、次にサービス、そしてORM経由のデータベース、という具合だ。
 
-Here, infrastructure depends on interfaces declared inside the core. That splits the flow of execution from the direction of the dependencies. At runtime, the HTTP controller calls the use case, which calls the database adapter. In the code, the database adapter depends on `UserRepositoryInterface`, which lives in the application layer. The dependency points inward while the call points outward.
+ここでは、インフラがコアの内側で宣言されたインターフェースに依存する。これによって、実行フローの向きと依存関係の向きが切り離される。実行時には、HTTPコントローラーがユースケースを呼び出し、ユースケースがデータベースアダプターを呼び出す。コード上では、データベースアダプターはアプリケーション層に存在する `UserRepositoryInterface` に依存している。依存は内側を向き、呼び出しは外側を向く。
 
 > [!IMPORTANT]
-> Dependency inversion is what protects the business logic. The domain and the application declare the contracts they need. Infrastructure implements them. The outside depends on the inside, never the other way around.
+> ビジネスロジックを守っているのは、まさにこの依存性逆転だ。ドメインとアプリケーションが必要とする契約を宣言し、インフラがそれを実装する。外側が内側に依存するのであって、その逆は決してない。
 
-The rest of the article refactors the spaghetti controller against that rule.
+この後の内容は、この規則に沿ってスパゲッティコントローラーをリファクタリングしていく。
 
 ---
 
-## 3. The core: domain and ports
+## 3. コア：ドメインとポート
 
-Start at the centre.
+まずは中心から始めよう。
 
-### The domain
+### ドメイン
 
-The domain holds the rules and nothing else. Plain PHP, no framework, no database, and it is responsible for making sure invariants hold.
+ドメインはルールだけを保持し、それ以外は何も持たない。フレームワークもデータベースもない素のPHPで、不変条件（インバリアント）が確実に守られるようにする責任を負う。
 
-#### 1. Business exceptions
+#### 1. ビジネス例外
 
-Start with exceptions that model functional errors rather than technical ones.
+まずは、技術的なエラーではなく機能的なエラーをモデル化する例外から始める。
 
 ```php
 <?php
@@ -249,9 +249,9 @@ class WeakPasswordException extends \DomainException
 }
 ```
 
-#### 2. The `User` entity
+#### 2. `User` エンティティ
 
-The entity owns the invariants: a valid email, a strong enough password, and hashing before the value is ever stored.
+このエンティティは不変条件そのものを保有する――有効なメールアドレス、十分な強度のパスワード、そして値が保存される前に必ずハッシュ化されること。
 
 ```php
 <?php
@@ -327,13 +327,13 @@ class User
 
 ---
 
-### The ports
+### ポート
 
-Ports are the contracts the hexagon communicates through. The domain or the use case declares what it needs; neither knows how it will be provided.
+ポートは、ヘキサゴンがそれを通してやり取りする契約だ。ドメインまたはユースケースが必要なものを宣言し、それがどう提供されるかはどちらも知らない。
 
-#### 1. `UserRepositoryInterface`, an outbound port
+#### 1. `UserRepositoryInterface`、アウトバウンドポート
 
-Everything the hexagon needs in order to store and find users:
+ヘキサゴンがユーザーを保存・検索するために必要なものすべて。
 
 ```php
 <?php
@@ -350,9 +350,9 @@ interface UserRepositoryInterface
 }
 ```
 
-#### 2. `MailerInterface`, an outbound port
+#### 2. `MailerInterface`、アウトバウンドポート
 
-And the ability to notify the user once registered:
+そして、登録完了後にユーザーへ通知する能力。
 
 ```php
 <?php
@@ -369,13 +369,13 @@ interface MailerInterface
 
 ---
 
-## 4. The application layer
+## 4. アプリケーション層
 
-This layer coordinates use cases. It depends on the domain and on the ports, and on nothing else.
+この層はユースケースを調整する。依存するのはドメインとポートのみで、それ以外には何も依存しない。
 
-### Data transfer objects
+### データ転送オブジェクト（DTO）
 
-DTOs carry data in and out in a structured, immutable shape, so the application never sees an HTTP request or a framework type.
+DTOは、構造化された不変な形でデータを出入りさせる役割を持ち、アプリケーションがHTTPリクエストやフレームワーク固有の型を直接目にすることはない。
 
 #### 1. `RegisterUserRequest`
 
@@ -422,9 +422,9 @@ readonly class RegisterUserResponse
 }
 ```
 
-### The use case: `RegisterUser`
+### ユースケース：`RegisterUser`
 
-The class that orchestrates user creation. Both ports arrive through the constructor:
+ユーザー作成を統括するクラス。2つのポートはどちらもコンストラクタ経由で渡される。
 
 ```php
 <?php
@@ -479,19 +479,19 @@ class RegisterUser
 ```
 
 > [!NOTE]
-> **Transactional safety and side effects:** the example sends the email right after the save. In production, an SMTP outage makes the use case throw even though the user is already in the database. The usual fix is a **domain event** plus the **outbox** pattern, so the email is handed off asynchronously and retried.
+> **トランザクションの安全性と副作用：** この例では、保存の直後にメールを送信している。本番環境でSMTPに障害が起きると、ユーザーは既にDBに存在するにもかかわらず、ユースケース自体は例外を投げてしまう。よくある解決策は、**ドメインイベント**と**アウトボックス**パターンを組み合わせ、メール送信を非同期に切り出してリトライ可能にすることだ。
 
 ---
 
-## 5. The infrastructure layer
+## 5. インフラストラクチャ層
 
-Infrastructure holds the concrete implementations of the ports, and the entry points that trigger the core.
+インフラは、ポートの具体的な実装と、コアを起動するエントリーポイントを保持する。
 
-### Outbound adapters
+### アウトバウンドアダプター
 
-These implement the outbound ports against a real technology: SQL, SMTP.
+これらはアウトバウンドポートを、SQLやSMTPといった実際の技術に対して実装する。
 
-#### 1. `SqlUserRepository`, via PDO
+#### 1. `SqlUserRepository`、PDO経由
 
 ```php
 <?php
@@ -569,7 +569,7 @@ class SqlUserRepository implements UserRepositoryInterface
 }
 ```
 
-#### 2. `SmtpMailer`, via Symfony Mailer
+#### 2. `SmtpMailer`、Symfony Mailer経由
 
 ```php
 <?php
@@ -604,13 +604,13 @@ class SmtpMailer implements MailerInterface
 
 ---
 
-### Inbound adapters
+### インバウンドアダプター
 
-These catch an external stimulus, check the shape of the request, and call the use case.
+これらは外部からの刺激を受け取り、リクエストの形を検証してからユースケースを呼び出す。
 
 #### 1. `RegisterUserController`
 
-It decodes the HTTP request, builds the DTO, and runs the use case. A `DomainException` comes back as `422 Unprocessable Entity` carrying the domain's own message.
+HTTPリクエストをデコードし、DTOを組み立て、ユースケースを実行する。`DomainException` は `422 Unprocessable Entity` として返され、ドメイン自身のメッセージがそのまま乗る。
 
 ```php
 <?php
@@ -676,7 +676,7 @@ class RegisterUserController
 
 #### 2. `RegisterUserCommand`
 
-A second entry point, this time the console, plugs into the same use case. Not one line of business code changes.
+2つ目のエントリーポイントとして、今度はコンソールが同じユースケースに接続される。ビジネスコードは一行も変わらない。
 
 ```php
 <?php
@@ -741,13 +741,13 @@ class RegisterUserCommand extends Command
 
 ---
 
-## 6. Folder structure and wiring
+## 6. ディレクトリ構成と配線
 
-Two things remain: a directory layout that matches the layers, and a DI container that knows which adapter answers which port.
+残るのは2つ――各層に対応したディレクトリ構成と、どのアダプターがどのポートに応答するかを知っているDIコンテナだ。
 
-### Folder structure
+### ディレクトリ構成
 
-Here is how the layers sit inside `src/` in a modern PHP application:
+モダンなPHPアプリケーションにおいて、各層が `src/` の中にどう配置されるかを見てみよう。
 
 ```text
 src/
@@ -759,39 +759,39 @@ src/
 │   ├── Exception/
 │   │   ├── InvalidEmailException.php
 │   │   └── WeakPasswordException.php
-│   ├── Repository/         <-- Outbound Ports (Driven Ports)
+│   ├── Repository/         <-- アウトバウンドポート（Driven Ports）
 │   │   └── UserRepositoryInterface.php
-│   └── Gateway/            <-- Outbound Ports for third-party services
+│   └── Gateway/            <-- サードパーティサービス向けのアウトバウンドポート
 │       └── MailerInterface.php
 ├── Application/
-│   ├── UseCase/            <-- Hexagon Use Cases
+│   ├── UseCase/            <-- ヘキサゴンのユースケース
 │   │   └── RegisterUser.php
-│   └── DTO/                <-- Data Transfer Objects
+│   └── DTO/                <-- データ転送オブジェクト
 │       ├── RegisterUserRequest.php
 │       └── RegisterUserResponse.php
 └── Infrastructure/
-    ├── Adapter/            <-- Concrete Adapters
-    │   ├── Http/           <-- Inbound (Driving): Controllers
+    ├── Adapter/            <-- 具体的なアダプター
+    │   ├── Http/           <-- インバウンド（Driving）：コントローラー
     │   │   └── RegisterUserController.php
-    │   ├── Cli/            <-- Inbound (Driving): Console Commands
+    │   ├── Cli/            <-- インバウンド（Driving）：コンソールコマンド
     │   │   └── RegisterUserCommand.php
-    │   ├── Persistence/    <-- Outbound (Driven): ORM, SQL, In-Memory
+    │   ├── Persistence/    <-- アウトバウンド（Driven）：ORM、SQL、インメモリ
     │   │   ├── SqlUserRepository.php
     │   │   └── InMemoryUserRepository.php
-    │   └── Mailer/         <-- Outbound (Driven): SMTP, Brevo, etc.
+    │   └── Mailer/         <-- アウトバウンド（Driven）：SMTP、Brevoなど
     │       └── SmtpMailer.php
-    └── Share/              <-- Shared code and cross-cutting utilities
+    └── Share/              <-- 共有コードと横断的なユーティリティ
 ```
 
-The separation is physical, not just conceptual. Someone opening the project for the first time can tell the business rules from the orchestration and from the technical details without reading a line of code.
+この分離は概念的なだけでなく、物理的でもある。プロジェクトを初めて開いた人でも、一行のコードも読まずに、ビジネスルールとオーケストレーションと技術的詳細を見分けられる。
 
-### Wiring
+### 配線
 
-The hexagon never instantiates an infrastructure class. It depends on interfaces, and the framework's DI container resolves them at runtime.
+ヘキサゴンはインフラのクラスを直接インスタンス化することは決してない。インターフェースに依存し、フレームワークのDIコンテナがそれを実行時に解決する。
 
-#### Option A: Symfony (`services.yaml`)
+#### オプションA：Symfony（`services.yaml`）
 
-Symfony's autowiring handles most of this on its own once the class name matches the expected type. To pick a specific adapter for an interface, bind it explicitly:
+Symfonyのオートワイヤリングは、クラス名が期待される型に一致していれば、ほとんどの部分を自動でやってくれる。あるインターフェースに対して特定のアダプターを選びたい場合は、明示的にバインドする。
 
 ```yaml
 # config/services.yaml
@@ -818,9 +818,9 @@ services:
         class: App\Infrastructure\Adapter\Mailer\SmtpMailer
 ```
 
-#### Option B: Laravel (`AppServiceProvider`)
+#### オプションB：Laravel（`AppServiceProvider`）
 
-Laravel does the same binding in PHP, through a service provider, usually in `register()`:
+Laravelは同じバインディングをPHPで行い、サービスプロバイダー、通常は `register()` の中に書く。
 
 ```php
 <?php
@@ -849,17 +849,17 @@ class AppServiceProvider extends ServiceProvider
 
 ---
 
-## 7. Going further
+## 7. さらに一歩進める
 
-### Testing without infrastructure
+### インフラなしでテストする
 
-Decoupling the core buys one thing above all: you can test the use cases with no network, no filesystem, no database.
+コアを疎結合にすることで得られる一番のメリットは、ユースケースをネットワークもファイルシステムもデータベースもなしにテストできることだ。
 
-Mocking libraries would work, but they make tests verbose and they break every time you refactor internals. Writing an in-memory implementation of the port is usually cheaper.
+モックライブラリを使う手もあるが、テストが冗長になり、内部をリファクタリングするたびに壊れやすい。ポートのインメモリ実装を書く方が、大抵の場合は安上がりだ。
 
 #### 1. `InMemoryUserRepository`
 
-This test adapter keeps entities in a PHP array. From the use case's point of view it behaves like the database, and it costs nothing to set up.
+このテスト用アダプターは、エンティティをPHPの配列に保持する。ユースケースから見れば本物のデータベースのように振る舞い、しかも用意するコストはゼロに等しい。
 
 ```php
 <?php
@@ -903,7 +903,7 @@ class InMemoryUserRepository implements UserRepositoryInterface
 }
 ```
 
-Same idea for the mailer. `InMemoryMailer` records what it was asked to send so the test can check it afterwards:
+メーラーについても同じ発想だ。`InMemoryMailer` は送信を依頼された内容を記録しておき、テストが後からそれを検証できるようにする。
 
 ```php
 <?php
@@ -937,9 +937,9 @@ class InMemoryMailer implements MailerInterface
 }
 ```
 
-#### 2. The PHPUnit test
+#### 2. PHPUnitのテスト
 
-Now the test is a plain unit test. No test database, and no failure the morning the SMTP server is down.
+これで、テストはごく普通のユニットテストになる。テスト用データベースは不要だし、SMTPサーバーが落ちている朝にテストが失敗することもない。
 
 ```php
 <?php
@@ -1039,15 +1039,15 @@ class RegisterUserTest extends TestCase
 ```
 
 > [!TIP]
-> **Execution speed:** these tests run in under 2 milliseconds each. On a project with hundreds of business rules, thousands of unit tests finish in under 3 seconds. That is the feedback loop that makes TDD bearable.
+> **実行速度：** これらのテストは1つあたり2ミリ秒以下で終わる。数百のビジネスルールを持つプロジェクトでも、数千のユニットテストが3秒以内に完走する。これこそが、TDDを実践可能にするフィードバックループだ。
 
 ---
 
-### Enforcing the rule with Deptrac
+### Deptracでルールを強制する
 
-The whole thing rests on one rule: inner layers never depend on outer layers. Under delivery pressure, someone will import a Doctrine class or an HTTP controller straight into the domain, and code review will miss it.
+すべてはたった一つのルールの上に成り立っている――内側の層は決して外側の層に依存しない、というルールだ。納期のプレッシャーの下では、誰かがDoctrineのクラスやHTTPコントローラーをドメインに直接importしてしまい、コードレビューでもそれが見逃されることがある。
 
-**Deptrac** checks that statically and fails the build when a dependency points the wrong way. A `deptrac.yaml` for the structure above:
+**Deptrac** はこれを静的に検証し、依存関係が誤った方向を向いていればビルドを失敗させてくれる。上記の構成に対応する `deptrac.yaml` は以下の通り。
 
 ```yaml
 # deptrac.yaml
@@ -1080,42 +1080,42 @@ deptrac:
       - Domain
 ```
 
-Run `vendor/bin/deptrac` and it scans the code, failing loudly on any dependency pointing the wrong way.
+`vendor/bin/deptrac` を実行すればコードをスキャンし、間違った向きの依存関係があれば大声でエラーを出してくれる。
 
 ---
 
-### Where DDD and CQRS fit
+### DDDとCQRSはどこに位置づけられるか
 
-#### Domain-driven design
+#### ドメイン駆動設計（DDD）
 
-You can use the hexagon without DDD, but they fit together well. DDD is about modeling the business carefully; the hexagon is the container that keeps that model away from technical noise. Entities, value objects, aggregates, and domain services all live in the domain layer, and a DDD repository is exactly an outbound port.
+ヘキサゴンはDDDなしでも使えるが、両者は相性がいい。DDDはビジネスを丁寧にモデリングすることが目的で、ヘキサゴンはそのモデルを技術的なノイズから遠ざけておく入れ物だ。エンティティ、値オブジェクト、集約、ドメインサービスはすべてドメイン層に置かれ、DDDにおけるリポジトリは、まさにアウトバウンドポートそのものだ。
 
 #### CQRS
 
-CQRS splits reads from writes. In a hexagon, the write path goes through a use case, works on domain entities, and persists through a port.
+CQRSは読み取りと書き込みを分離する。ヘキサゴンにおいて、書き込みのパスはユースケースを経由し、ドメインエンティティを操作し、ポート経由で永続化する。
 
-The read path can bypass the hexagon, and often should. A query runs no business rules; it projects data. So an inbound adapter can call a dedicated query service that returns view DTOs straight from one well-tuned SQL statement, instead of rebuilding full entities only to flatten them again.
-
----
-
-### When to adopt it, and when not to
-
-There is no silver bullet here. The hexagon buys real things and costs real things.
-
-What you get: unit tests that run without side effects; freedom to replace the framework, the database, or a third-party service; business logic you can read without technical noise around it. It also lets one team work on use cases while another writes the adapters, since the ports are agreed upfront.
-
-What it costs: many more classes, interfaces, DTOs, and mappings. It asks everyone on the team to actually understand dependency inversion. And navigating the code means passing through an interface before you reach anything concrete.
-
-It is worth it on medium to large projects with real business logic, on applications meant to run for years while the infrastructure underneath them changes versions or vendors, and anywhere the test strategy matters.
-
-Skip it when the application is pure CRUD. If you only read and write rows without applying rules, the hexagon is scaffolding around nothing; use the framework's ORM directly. Skip it for a small gateway microservice of a few endpoints. And skip it for a throwaway prototype, where coupling straight to the framework is the right call until the business model is validated.
+読み取りのパスは、ヘキサゴンを迂回してもよいし、多くの場合そうすべきだ。クエリはビジネスルールを一切実行せず、データを射影するだけだからだ。したがって、インバウンドアダプターは、完全なエンティティを再構築してから改めてフラット化するのではなく、よくチューニングされた一本のSQL文からビュー用のDTOを直接返す専用のクエリサービスを呼び出せばよい。
 
 ---
 
-## Conclusion
+### 採用すべきとき、そうでないとき
 
-Isolating the domain and the use cases behind interfaces got us three things.
+ここに銀の弾丸はない。ヘキサゴンは現実の何かを手に入れる代わりに、現実のコストを払う。
 
-The code is testable: a fifteen-line `InMemoryUserRepository` replaces a database, with no mocking framework anywhere. Swapping Eloquent for Doctrine, or SMTP for Mailgun, leaves `RegisterUser` and `User` untouched; only a new adapter gets written. And the HTTP controller and the console command run the exact same use case.
+得られるもの：副作用なしで動くユニットテスト、フレームワークやデータベース、サードパーティサービスを入れ替える自由、技術的なノイズに邪魔されずに読めるビジネスロジック。ポートが事前に合意されているため、あるチームがユースケースに取り組む一方で、別のチームがアダプターを書く、という分業も可能になる。
 
-That costs more files and more discipline at the start. What it buys is a business layer that outlives the infrastructure under it.
+払うコスト：クラス、インターフェース、DTO、マッピングの数が大幅に増える。チーム全員が依存性逆転を本当に理解している必要がある。そしてコードを追うには、具体的な実装にたどり着く前に必ずインターフェースを一枚通り抜けなければならない。
+
+実際に本物のビジネスロジックを持つ中規模から大規模のプロジェクト、下回るインフラがバージョンやベンダーを変えながら何年も動き続けることを前提としたアプリケーション、そしてテスト戦略が重要な意味を持つ場面では、それに見合う価値がある。
+
+アプリケーションが純粋なCRUDであれば、見送っていい。ルールを適用せずに行をただ読み書きするだけなら、ヘキサゴンは何もない場所に組んだ足場にすぎない――フレームワークのORMを直接使えばいい。数エンドポイント程度の小さなゲートウェイ型マイクロサービスでも見送っていい。そして使い捨てのプロトタイプでも、ビジネスモデルが検証されるまではフレームワークに直接結合するのが正解であり、これも見送るべきケースだ。
+
+---
+
+## まとめ
+
+ドメインとユースケースをインターフェースの背後に隔離したことで、私たちは3つのものを手に入れた。
+
+コードはテスト可能になった――15行の `InMemoryUserRepository` がデータベースを丸ごと置き換え、モックフレームワークは一切登場しない。EloquentをDoctrineに、SMTPをMailgunに差し替えても、`RegisterUser` と `User` は無傷のままだ。書くのは新しいアダプター一つだけでいい。そしてHTTPコントローラーもコンソールコマンドも、まったく同じユースケースを実行する。
+
+これには最初、ファイル数と規律という代償がかかる。その見返りに手に入るのは、下回るインフラより長生きするビジネス層だ。
