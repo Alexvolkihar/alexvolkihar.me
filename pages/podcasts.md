@@ -2,7 +2,8 @@
 title: Podcasts - Alexvolkihar
 display: ''
 art: plum
-items:
+items: []
+_items_archived_antfu:
   - title: 'Exploring Vitesse with Anthony Fu - Views on Vue #144'
     date: '2021-03-02'
     path: 'https://viewsonvue.com/144'
@@ -183,4 +184,7 @@ items:
 
 <SubNav />
 
-<ListPosts :posts="frontmatter.items.reverse()" />
+<div v-if="!frontmatter.items.length" op50 py8 text-center>
+Pas encore de contenu ici.
+</div>
+<ListPosts v-else :posts="frontmatter.items.reverse()" />
