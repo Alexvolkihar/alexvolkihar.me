@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Patterns of VueUse
 place: Vue Fes Japan 2022
 description: Patterns of VueUse - Vue Fes Japan 2022

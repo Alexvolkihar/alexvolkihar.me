@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Hello Tokyo!
 date: 2025-04-08T00:00:00Z
 lang: en

@@ -1,4 +1,5 @@
 ---
+draft: true
 title: pnpm on External disk
 date: 2023-07-13T12:00:00Z
 lang: en

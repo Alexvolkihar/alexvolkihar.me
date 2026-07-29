@@ -1,4 +1,5 @@
 ---
+draft: true
 title: "Automating the SDLC: Lessons from My Master's Thesis"
 date: 2025-11-26T00:00:00Z
 lang: en

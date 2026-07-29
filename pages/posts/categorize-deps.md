@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Categorize Your Dependencies
 date: 2025-04-28T14:00:00Z
 lang: en

@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Composable Vue
 place: VueDay 2021
 placeLink: https://2021.vueday.it/

@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Nuxt Devtools v1.0
 date: 2023-11-13T16:00:00Z
 lang: en

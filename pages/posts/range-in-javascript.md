@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Range in JavaScript
 date: 2021-09-13T16:00:00Z
 lang: en

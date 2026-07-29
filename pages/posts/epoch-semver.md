@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Epoch Semantic Versioning
 date: 2025-01-07T12:00:00.000+00:00
 lang: en

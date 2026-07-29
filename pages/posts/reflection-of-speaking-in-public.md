@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Reflection of Speaking in Public
 description: My sincere apologies to everyone involved.
 date: 2021-03-27T16:00:00.000+00:00

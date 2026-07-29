@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Introducing Nuxt Icon v1
 date: 2024-11-25T16:00:00Z
 lang: en

@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Introduction to Vitest
 place: Vue.js Nation 2022
 description: Introduction to Vitest - Vue.js Nation 2022

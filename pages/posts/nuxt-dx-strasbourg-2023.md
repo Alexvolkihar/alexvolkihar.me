@@ -1,4 +1,5 @@
 ---
+draft: true
 title: DX with Nuxt DevTools
 place: StrasbourgJS 2023
 placeLink: https://strasbourgjs.org/

@@ -22,7 +22,10 @@ const parts = computed(() => {
 </script>
 
 <template>
-  <div grid="~ cols-1 lg:cols-2 xl:cols-3 gap-4">
+  <div v-if="!demoItems.length" py2 op50>
+    { nothing here yet }
+  </div>
+  <div v-else grid="~ cols-1 lg:cols-2 xl:cols-3 gap-4">
     <div v-for="items, idx of parts" :key="idx" flex="~ col gap-4">
       <component
         :is="comp"

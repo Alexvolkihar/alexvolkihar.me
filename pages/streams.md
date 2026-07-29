@@ -118,16 +118,8 @@ _items_archived_antfu:
 
 <SubNav />
 
-<div slide-enter>
-
-<div i-ri:vidicon-2-line mr2 />
-<span op50>Live streaming at <a href="https://www.youtube.com/anthonyfu7" target="_blank">YouTube</a> & <a href="https://space.bilibili.com/668380" target="_blank">哔哩哔哩</a></span>
-
-</div>
-
-<StreamAnnouncement />
-
 <div v-if="!frontmatter.items.length" op50 py8 text-center>
-Pas encore de contenu ici.
+<div>Nothing here yet.</div>
+<div text-sm mt1>Pas encore de contenu ici.</div>
 </div>
 <ListPosts v-else :posts="frontmatter.items.reverse()" />

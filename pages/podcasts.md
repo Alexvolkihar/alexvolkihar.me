@@ -185,6 +185,7 @@ _items_archived_antfu:
 <SubNav />
 
 <div v-if="!frontmatter.items.length" op50 py8 text-center>
-Pas encore de contenu ici.
+<div>Nothing here yet.</div>
+<div text-sm mt1>Pas encore de contenu ici.</div>
 </div>
 <ListPosts v-else :posts="frontmatter.items.reverse()" />

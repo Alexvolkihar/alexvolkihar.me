@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Development Experience with Nuxt
 place: Vue Amsterdam 2023
 placeLink: https://vuejs.amsterdam/

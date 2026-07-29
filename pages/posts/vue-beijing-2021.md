@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Develop with Vite
 place: Vue Beijing
 type: talk+blog
