@@ -577,6 +577,13 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/posts/photos-page-ja': RouteRecordInfo<
+      '/posts/photos-page-ja',
+      '/posts/photos-page-ja',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/posts/pnpm-external-disk': RouteRecordInfo<
       '/posts/pnpm-external-disk',
       '/posts/pnpm-external-disk',
@@ -1300,6 +1307,12 @@ declare module 'vue-router/auto-routes' {
     'pages/posts/photos-page-fr.md': {
       routes:
         | '/posts/photos-page-fr'
+      views:
+        | never
+    }
+    'pages/posts/photos-page-ja.md': {
+      routes:
+        | '/posts/photos-page-ja'
       views:
         | never
     }
