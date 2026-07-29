@@ -1,5 +1,4 @@
 ---
-draft: true
 title: Get Package Root
 date: 2021-07-14T16:00:00Z
 lang: en

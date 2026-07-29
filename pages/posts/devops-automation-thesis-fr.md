@@ -1,5 +1,4 @@
 ---
-draft: true
 title: "Automatiser le cycle de développement : retour d'expérience de mon mémoire"
 date: 2025-11-26T00:00:00Z
 lang: fr

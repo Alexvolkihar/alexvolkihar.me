@@ -1,5 +1,4 @@
 ---
-draft: true
 title: TwoSlash with Shiki
 date: 2023-12-12T16:00:00Z
 lang: en

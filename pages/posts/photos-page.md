@@ -2,8 +2,11 @@
 title: The Photos Page
 date: 2026-07-29T12:00:00Z
 lang: en
+art: random
 duration: 3min
 ---
+
+> [Version Française](/posts/photos-page-fr) · [日本語版](/posts/photos-page-ja)
 
 As you might have noticed, I added a [photos page](/photos) to this site. It's something I'd wanted to do for a while, without ever really getting around to it.
 

@@ -1,5 +1,4 @@
 ---
-draft: true
 title: NPM Binary 镜像配置
 date: 2022-02-18T16:00:00.000+00:00
 lang: zh

@@ -1,5 +1,4 @@
 ---
-draft: true
 title: "Automating the SDLC: Lessons from My Master's Thesis"
 date: 2025-11-26T00:00:00Z
 lang: en
@@ -9,32 +8,32 @@ description: A technical and personal review of automating the software developm
 
 > [Version Française](/posts/devops-automation-thesis-fr) | [日本語版](/posts/devops-automation-thesis-ja)
 
-In modern software development, delivery speed and technical code quality are often perceived as two opposing forces. On one side, the business demands features faster and faster; on the other, operational stability requires rigor and multiple safeguards. 
+In software development, delivery speed and code quality often feel like opposing forces. The business wants features faster and faster, while operational stability demands rigor and safeguards.
 
-To address this tension, I conducted my research as part of my preparation for the **Manageur de Solutions Digitales et Data (MS2D)** master's degree at **ENI École**. Supported by my company mentor at the Rennes agency of my company (an IT services company), I planned and implemented a global automation strategy around a central question: 
+To work through that tension, I did this research as part of my **Manageur de Solutions Digitales et Data (MS2D)** master's degree at **ENI École**. With support from my mentor at my company's Rennes office (we do IT services), I planned and rolled out a company-wide automation strategy built around one question:
 
 > "What software solutions can automate the various stages of a software development lifecycle to improve team productivity?"
 
-Here is the retrospective of this technical, organizational, and human adventure.
+Here's the retrospective of that adventure, technical, organizational, and human all at once.
 
 ---
 
-## 1. The Current State: Diagnosing Friction (The Audit)
+## 1. Diagnosing friction: where things stood
 
 Before rushing headfirst into writing scripts, we had to analyze our existing processes. To carry out this diagnosis objectively, we implemented an audit methodology structured around two pillars:
 *   **Developer surveys**: We regularly sent questionnaires and conducted individual interviews to map the team's feedback regarding repetitive manual work ("toil") and to precisely identify daily pain points.
 *   **Value Stream Mapping (VSM)**: We modeled the complete path of a code change, from the initial commit on the development workstation to its actual release in production. This exercise allowed us to measure processing times, wait times, and operational bottlenecks that slowed down our delivery flow:
 
 *   **The "it works on my machine" effect**: Without rigorous environment standardization, each developer configured their local machine manually. Subtle version discrepancies (Node.js, Java runtimes, or system libraries) led to surprise errors during deployment.
-*   **Manual and anxiety-inducing deployments**: Releasing to staging or production relied on multi-page paper runbooks. We had to transfer packages via FTP/SCP, stop services manually, run SQL scripts by hand, and restart everything—often late at night. Skipping a single step meant the release failed.
-*   **Delayed feedback loop**: Without systematic test execution, regressions or code quality issues were only discovered during the QA phase, or worse, directly in production by our users. Fixing a bug weeks after it was introduced proved to be extremely costly and time-consuming.
+*   **Manual and anxiety-inducing deployments**: Releasing to staging or production relied on multi-page paper runbooks. We had to transfer packages via FTP/SCP, stop services manually, run SQL scripts by hand, and restart everything, often late at night. Skipping a single step meant the release failed.
+*   **Delayed feedback loop**: Without systematic test execution, regressions or code quality issues were only discovered during the QA phase, or worse, directly in production by our users. Fixing a bug weeks after it was introduced was costly and slow.
 *   **Pronounced Dev/Ops silos**: Developers would "throw" their releases over the wall to system administrators, who had to manage the infrastructure in isolation without any real visibility into the application code.
 
 ---
 
-## 2. The Benchmark: Making the Right Technology Choices
+## 2. The benchmark: picking the tools
 
-To resolve these pain points, I conducted a comparative study to select the toolchain best suited to our company's constraints and team skills. To do this, we defined a rigorous evaluation matrix based on several key criteria:
+To resolve these pain points, I ran a comparative study to select the toolchain best suited to our company's constraints and team skills. We defined an evaluation matrix based on a few criteria:
 *   **Licensing costs**: Prioritizing open-source solutions or tools integrated at no extra cost into our existing software to avoid increasing recurring expenses.
 *   **Operational and maintenance effort**: Choosing solutions that are easy to administer and update daily to avoid overloading our operations teams.
 *   **Vendor lock-in**: Ensuring that tools and environments rely on open technologies to preserve our freedom to migrate in the future.
@@ -49,35 +48,35 @@ graph TD
     D --> E[Monitoring & Logs: Prometheus + Grafana / ELK]
 ```
 
-### CI/CD: The Choice of Native Integration with GitLab CI
+### CI/CD: going with GitLab CI
 Although Jenkins is the industry veteran and GitHub Actions is highly popular, we prioritized **GitLab CI**. Since our company already hosted its source code on an on-premises GitLab instance, GitLab CI was a natural fit:
 *   No third-party tools to manage or secure (significantly reducing the maintenance overhead compared to a Jenkins server).
 *   Pipelines declared as YAML files (`.gitlab-ci.yml`) versioned directly alongside the application code (*Pipeline-as-Code*).
 *   A unified user interface linking commits, branches, merge requests, and build status together.
 
-### Orchestration: Why Docker Swarm instead of Kubernetes?
-**Kubernetes (K8s)** has become the industry standard for container orchestration, but it introduces immense operational complexity and infrastructure costs for mid-sized teams working on internal projects. 
+### Orchestration: why Docker Swarm instead of Kubernetes?
+**Kubernetes (K8s)** is the industry standard for container orchestration, but it brings a lot of operational complexity and infrastructure cost for mid-sized teams working on internal projects.
 
 I chose to adopt **Docker Swarm** for the following reasons:
 *   **Gentle learning curve**: Swarm uses the same declarative syntax as Docker Compose, a tool our developers were already familiar with.
 *   **Lightweight and cost-effective**: Swarm runs directly on the standard Docker engine without requiring a dedicated cluster of machines to manage the control plane.
 *   **Sufficient feature set**: Swarm natively handles multi-node clustering, service discovery, load balancing, and rolling updates (progressive deployments with zero downtime).
 
-### Quality and Observability: SonarQube and the Prometheus/Grafana Duo
+### Quality and observability: SonarQube, Prometheus, and Grafana
 For code quality and security, **SonarQube** was integrated to provide immediate feedback on technical debt, security vulnerabilities, and test coverage.
 
 On the production side, observability was structured around **Prometheus** (collecting application and system metrics via dedicated exporters) and **Grafana** (for real-time visualization and alerting on Slack/Teams). Logs were centralized using the **ELK** suite (Elasticsearch, Logstash, Kibana).
 
 ---
 
-## 3. The Pilot Project: Event (our internal event-planning application) in the Field
+## 3. The pilot project: Event, in the field
 
 To validate this architecture, we ran an experiment on **Event (our internal event-planning application)**, a representative internal application consisting of a **Vue.js** frontend, a **Spring Boot (Java)** backend, and a **PostgreSQL** database. The effort focused on the complete migration of the "User Account Management" module.
 
 > [!NOTE]
 > During this 2-week pilot sprint, management agreed to a temporary feature freeze, allowing the team to focus exclusively on DevOps engineering and pipeline setup.
 
-Here is how we solved the main technical challenges encountered under real-world conditions:
+Here's how we solved the main technical challenges we hit in the field:
 
 ### Challenge 1: Slow Pipeline Runs (from 20 min to 8 min)
 During initial runs, the pipeline took nearly 20 minutes to complete, mostly due to systematically downloading Maven dependencies and rebuilding Docker layers from scratch. 
@@ -117,13 +116,13 @@ test-frontend:
     policy: pull
 ```
 
-Overall build times dropped to **8 minutes**, making the feedback loop pleasant and efficient for the team.
+Overall build times dropped to **8 minutes**, and the feedback loop became a lot less painful for the team.
 
-### Challenge 2: Flaky UI Tests
+### Challenge 2: flaky UI tests
 End-to-end (E2E) tests on the Vue.js frontend failed randomly due to browser rendering latencies, without any actual bugs in the code.
-*   **Solution**: We banned fixed wait times (e.g., `sleep 2000`) and replaced them with explicit synchronizations (dynamic `waitFor` statements in Cypress and Playwright). Additionally, we implemented an automatic retry system (configured to 1 retry upon failure) to filter out false negatives in the CI.
+*   **Solution**: We banned fixed wait times (e.g., `sleep 2000`) and replaced them with explicit synchronizations (dynamic `waitFor` statements in Cypress and Playwright). We also added an automatic retry system (1 retry on failure) to filter out false negatives in the CI.
 
-### Challenge 3: Service Startup Order and Database Connection Failures
+### Challenge 3: service startup order and database connection failures
 During initial deployments of our container stack, the Spring Boot application container started faster than the database engine. The application attempted to connect immediately to a database that was not yet operational, resulting in fatal connection failures and container crashes.
 *   **Solution**: We resolved this sequencing issue by implementing a `healthcheck` block on the database using the `mysqladmin ping` command. On the web application side, we configured the `depends_on` directive with the `service_healthy` condition to delay the backend startup until the database is fully operational.
 
@@ -166,19 +165,19 @@ services:
     restart: unless-stopped
 ```
 
-### Challenge 4: Database Schema Drift
+### Challenge 4: database schema drift
 The staging database schema frequently drifted from the developers' local schemas, causing application crashes during deployments.
 *   **Solution**: We integrated **Flyway** into our backend build and execution process. Schema changes are now written as versioned SQL files (e.g., `V1__init.sql`, `V2__add_user_roles.sql`) placed in `src/main/resources/db/migration`. On startup, Flyway compares these files with the internal metadata table (`flyway_schema_history`) and automatically applies missing scripts in sequential order. If an inconsistency or undocumented change is detected, the backend container refuses to start and the deployment pipeline fails, ensuring that no code version runs with an incompatible database structure.
 
-### Challenge 5: Under-dimensioned Infrastructure
+### Challenge 5: under-dimensioned infrastructure
 Prometheus quickly triggered swap usage alerts on the staging VM, causing highly unstable API response times.
 *   **Solution**: Analyzing memory usage graphs in Grafana revealed that the Spring Boot application and the database instance were tightly constrained, saturating the VM's 2 GB of allocated RAM. The RAM was upgraded to **4 GB**, which immediately stabilized performance and resolved the slowdowns.
 
 ---
 
-## 4. The Results: Proof in the Numbers (DORA & Quality)
+## 4. Results: DORA metrics and quality
 
-The results gathered after several sprints of running the pilot module speak for themselves. They concretely demonstrate the impact of automation on our process efficiency and deliverable quality:
+Here's what changed after running the pilot module for several sprints:
 
 | Metric | Before | After | Impact |
 | :--- | :---: | :---: | :---: |
@@ -188,13 +187,13 @@ The results gathered after several sprints of running the pilot module speak for
 | **Technical Debt** (SonarQube) | Baseline | **-15%** | Proactive refactoring |
 | **Deployment Success Rate** | Unpredictable | **100% (over 7 deployments)** | Reliable procedures |
 
-These indicators align directly with the key metrics defined by **DORA** (DevOps Research and Assessment). We proved that it is possible to speed up the delivery rate while dramatically increasing the quality and stability of the application.
+These indicators map directly onto the metrics tracked by **DORA** (DevOps Research and Assessment). We proved it's possible to speed up delivery while also making the application meaningfully more stable.
 
 ---
 
-## 5. Future Trends: Where Do We Go From Here?
+## 5. What's next
 
-Rolling out this strategy across all our company's teams is currently underway on a 9-to-12-month roadmap. Looking further ahead, exciting opportunities lie before us:
+Rolling this strategy out across the rest of the company's teams is underway, on a 9-to-12-month roadmap. Beyond that, here's what's on the radar:
 
 1.  **Platform Engineering & Self-Service**: Our goal is to build an Internal Developer Platform (IDP) or implement *ChatOps* commands (via Slack or Teams). This will allow developers to provision ephemeral test environments or trigger a test run with a single click, without needing to master the underlying Docker or Terraform plumbing.
 2.  **Advanced DevSecOps**: We plan to shift security further left (*Shift-Left*) by integrating automated vulnerability scans on third-party Docker images using Harbor, Software Composition Analysis (SCA), and Infrastructure as Code (IaC) scanning on our Terraform scripts to prevent exposing vulnerable resources.
@@ -233,9 +232,9 @@ Here is an example of our `renovate.json` configuration:
 
 ## Conclusion
 
-This thesis work has demonstrated that automation is far more than a set of trendy tools: it is a genuine driver of economic and human performance for the company. By freeing engineers from manual, repetitive, and anxiety-inducing tasks, we allow them to refocus on their core expertise: designing and developing value for our clients. 
+What this thesis work showed me is that automation isn't just about adopting trendy tools, it actually pays off, economically and for the people doing the work. Freeing engineers from manual, repetitive, anxiety-inducing tasks lets them get back to what they're actually good at: building things our clients value.
 
-The path toward DevOps is a journey of continuous improvement where a collaborative culture and learning through experience matter just as much as the technologies chosen.
+DevOps isn't something you finish. You keep tuning it, and the culture and lessons picked up along the way matter as much as which tools you pick.
 
 ---
 *Many thanks to the director of our agency, to my company mentor, and the entire pedagogical team at ENI École for their support throughout the writing of this thesis.*

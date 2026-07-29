@@ -2,11 +2,12 @@
 title: "Mastering Hexagonal Architecture: From Spaghetti to Clean Code in PHP"
 date: 2026-07-06T00:00:00Z
 lang: en
+art: random
 duration: 15min
 description: A comprehensive, progressive guide to understanding, implementing, and mastering hexagonal architecture in PHP through a practical refactoring example.
 ---
 
-> [Version Française](/posts/hexagonal-architecture-fr)
+> [Version Française](/posts/hexagonal-architecture-fr) · [日本語版](/posts/hexagonal-architecture-ja)
 
 > Slides: [SPA](https://slides.alexvolkihar.ovh/2026/hexagonal-architecture/) (French only)
 >

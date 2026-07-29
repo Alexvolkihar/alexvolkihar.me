@@ -2,11 +2,12 @@
 title: "Mastering Atomic Design: From Copy-Paste to Design System"
 date: 2026-07-28T00:00:00Z
 lang: en
+art: random
 duration: 18min
 description: A comprehensive, progressive guide to understanding, implementing, and mastering Atomic Design, illustrated side by side with Symfony UX Twig Components and Vue 3.
 ---
 
-> [Version Française](/posts/atomic-design-fr)
+> [Version Française](/posts/atomic-design-fr) · [日本語版](/posts/atomic-design-ja)
 
 > Slides: [SPA](https://slides.alexvolkihar.ovh/2026/atomic-design/) (French only)
 >

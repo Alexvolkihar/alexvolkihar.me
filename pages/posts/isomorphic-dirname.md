@@ -1,5 +1,4 @@
 ---
-draft: true
 title: Isomorphic `__dirname`
 date: 2021-08-30T16:00:00Z
 lang: en

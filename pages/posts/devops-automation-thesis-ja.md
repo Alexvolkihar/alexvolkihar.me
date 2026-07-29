@@ -1,5 +1,4 @@
 ---
-draft: true
 title: "SDLCの自動化：修士論文から得た教訓"
 date: 2026-06-06T00:00:00Z
 lang: ja
