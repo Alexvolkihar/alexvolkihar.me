@@ -1,8 +1,9 @@
 ---
-title: Streams - Anthony Fu
+title: Streams - Alexvolkihar
 display: ''
 art: plum
-items:
+items: []
+_items_archived_antfu:
   - title: '用 Vue 写个扫雷吧！'
     date: '2022-03-09'
     path: 'https://www.bilibili.com/video/BV1ia411b7jY'
@@ -126,4 +127,7 @@ items:
 
 <StreamAnnouncement />
 
-<ListPosts :posts="frontmatter.items.reverse()" />
+<div v-if="!frontmatter.items.length" op50 py8 text-center>
+Pas encore de contenu ici.
+</div>
+<ListPosts v-else :posts="frontmatter.items.reverse()" />
