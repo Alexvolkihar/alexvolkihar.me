@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Icons in Pure CSS
 date: 2021-10-31T16:00:00Z
 lang: en

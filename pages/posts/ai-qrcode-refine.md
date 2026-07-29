@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Refining AI Generated QR Code
 date: 2023-06-30T17:00:00.000+00:00
 lang: en

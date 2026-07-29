@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Initiative on Sponsorship Forwarding
 date: 2024-04-20
 lang: en

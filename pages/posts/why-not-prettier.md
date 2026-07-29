@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Why I don't use Prettier
 date: 2022-10-01T00:00:00Z
 lang: en

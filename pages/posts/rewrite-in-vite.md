@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Rewrite in Vite
 date: 2021-01-31T16:00:00Z
 lang: en

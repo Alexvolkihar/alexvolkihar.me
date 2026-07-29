@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Destructuring... with object or array?
 description: Prefer object destructure or array? Can we support both?
 lang: en

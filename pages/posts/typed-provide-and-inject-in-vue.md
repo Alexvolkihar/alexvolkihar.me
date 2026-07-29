@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Typed Provide and Inject in Vue
 date: 2021-03-05T16:00:00Z
 lang: en

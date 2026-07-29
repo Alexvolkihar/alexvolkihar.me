@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Move on to ESM-only
 date: 2025-02-05T00:00:00Z
 lang: en

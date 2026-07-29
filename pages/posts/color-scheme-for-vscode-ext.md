@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Color Scheme for VS Code
 date: 2021-03-01T16:00:00Z
 lang: en

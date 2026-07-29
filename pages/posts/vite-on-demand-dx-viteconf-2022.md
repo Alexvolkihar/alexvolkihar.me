@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Vite, the on-demand DX
 place: ViteConf 2022
 description: Vite, the on-demand DX - ViteConf 2022

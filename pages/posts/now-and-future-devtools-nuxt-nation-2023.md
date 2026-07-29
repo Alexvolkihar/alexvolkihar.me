@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Now, and the Future of Nuxt Devtools
 place: Nuxt Nation 2023
 placeLink: https://nuxtnation.com/

@@ -1,4 +1,5 @@
 ---
+draft: true
 title: おはよう、東京！
 date: 2025-04-08T01:00:00Z
 lang: ja

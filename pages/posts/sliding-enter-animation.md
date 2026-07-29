@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Sliding Enter Animation
 date: 2023-05-07
 lang: en

@@ -1,4 +1,5 @@
 ---
+draft: true
 title: The Magic in Shiki Magic Move
 date: 2024-03-04
 lang: en

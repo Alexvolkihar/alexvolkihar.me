@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Bonjour Paris!
 date: 2022-12-10T16:00:00Z
 lang: en

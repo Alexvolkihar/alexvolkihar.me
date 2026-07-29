@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Dev SSR on Nuxt with Vite
 date: 2022-10-04T00:00:00Z
 lang: en

@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Introducing Nuxt Devtools
 date: 2023-03-27T16:00:00Z
 lang: en

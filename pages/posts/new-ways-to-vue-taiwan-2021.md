@@ -1,4 +1,5 @@
 ---
+draft: true
 title: New Ways to Vue
 place: '{ Laravel x Vue } Conf Taiwan 2021'
 description: 'New Ways to Vue - { Laravel x Vue } Conf Taiwan 2021'

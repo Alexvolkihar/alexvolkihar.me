@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Anthony's Roads to Open Source - The Progressive Path
 place: Vue Amsterdam
 placeLink: https://vuejs.amsterdam/

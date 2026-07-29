@@ -1,4 +1,5 @@
 ---
+draft: true
 title: 可组合的 Vue
 place: VueConf China 2021
 description: Slides of my talk at VueConf China 2021

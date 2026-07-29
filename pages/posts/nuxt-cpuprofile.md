@@ -1,4 +1,5 @@
 ---
+draft: true
 title: CPU Profiling Nuxt
 date: 2024-12-31T16:00:00Z
 lang: en

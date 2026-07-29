@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Type Inferencing in Vue
 date: 2020-06-28
 lang: en

@@ -1,4 +1,5 @@
 ---
+draft: true
 title: New Ways to Vue
 place: Vue.js Live London 2021
 placeLink: https://vuejs.london/
