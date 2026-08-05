@@ -227,6 +227,27 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/posts/canon-ai-coding-agents': RouteRecordInfo<
+      '/posts/canon-ai-coding-agents',
+      '/posts/canon-ai-coding-agents',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/posts/canon-ai-coding-agents-fr': RouteRecordInfo<
+      '/posts/canon-ai-coding-agents-fr',
+      '/posts/canon-ai-coding-agents-fr',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/posts/canon-ai-coding-agents-ja': RouteRecordInfo<
+      '/posts/canon-ai-coding-agents-ja',
+      '/posts/canon-ai-coding-agents-ja',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/posts/categorize-deps': RouteRecordInfo<
       '/posts/categorize-deps',
       '/posts/categorize-deps',
@@ -1007,6 +1028,24 @@ declare module 'vue-router/auto-routes' {
     'pages/posts/break-lines-in-js.md': {
       routes:
         | '/posts/break-lines-in-js'
+      views:
+        | never
+    }
+    'pages/posts/canon-ai-coding-agents.md': {
+      routes:
+        | '/posts/canon-ai-coding-agents'
+      views:
+        | never
+    }
+    'pages/posts/canon-ai-coding-agents-fr.md': {
+      routes:
+        | '/posts/canon-ai-coding-agents-fr'
+      views:
+        | never
+    }
+    'pages/posts/canon-ai-coding-agents-ja.md': {
+      routes:
+        | '/posts/canon-ai-coding-agents-ja'
       views:
         | never
     }
