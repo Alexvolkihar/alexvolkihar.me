@@ -57,7 +57,7 @@ onMounted(() => {
   useRafFn(() => {
     const t = Date.now() / 1000
     ctx.clearRect(0, 0, size.width, size.height)
-    ctx.fillStyle = 'rgba(136, 136, 136, 0.05)'
+    ctx.fillStyle = 'rgba(136, 136, 136, 0.07)'
 
     for (const band of BANDS)
       drawBand(ctx, band, size.width, size.height, t)
