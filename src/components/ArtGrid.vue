@@ -33,7 +33,7 @@ onMounted(() => {
     const rows = Math.ceil(size.height / CELL)
 
     // Faint outline on every cell so the grid itself always reads clearly.
-    ctx.strokeStyle = 'rgba(136, 136, 136, 0.12)'
+    ctx.strokeStyle = 'rgba(136, 136, 136, 0.05)'
     ctx.lineWidth = 1
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
@@ -49,7 +49,7 @@ onMounted(() => {
           continue
 
         const norm = (flicker - THRESHOLD) / (1 - THRESHOLD)
-        const alpha = norm ** 0.5 * 0.85
+        const alpha = norm ** 0.5 * 0.18
         ctx.fillStyle = `rgba(136, 136, 136, ${alpha})`
         ctx.fillRect(col * CELL + PADDING, row * CELL + PADDING, CELL - PADDING * 2, CELL - PADDING * 2)
       }
