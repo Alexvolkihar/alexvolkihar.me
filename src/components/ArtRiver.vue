@@ -8,7 +8,7 @@ interface Droplet {
 const el = ref<HTMLCanvasElement | null>(null)
 const size = reactive(useWindowSize())
 
-const LANES = 3
+const LANES = 4
 const DROPLETS_PER_LANE = 14
 const AMPLITUDE = 50
 const WAVELENGTH = 320
@@ -58,7 +58,7 @@ onMounted(() => {
   useRafFn(() => {
     ctx.clearRect(0, 0, size.width, size.height)
 
-    const laneYs = Array.from({ length: LANES }, (_, i) => size.height * (0.25 + i * 0.28))
+    const laneYs = Array.from({ length: LANES }, (_, i) => size.height * ((i + 1) / (LANES + 1)))
     const phase = Date.now() * 0.0002
 
     ctx.strokeStyle = 'rgba(136, 136, 136, 0.1)'

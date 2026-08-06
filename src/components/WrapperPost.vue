@@ -73,7 +73,7 @@ onMounted(() => {
   }, 1)
 })
 
-const ART_TYPES = ['plum', 'dots', 'field', 'orbit', 'wave', 'constellation', 'rain', 'spiral', 'ripple', 'bubbles', 'truchet', 'stars', 'lissajous', 'fireflies', 'aurora', 'grid', 'halftone', 'circuit', 'river', 'rust', 'snow', 'radar'] as const
+const ART_TYPES = ['plum', 'dots', 'field', 'orbit', 'wave', 'constellation', 'rain', 'spiral', 'ripple', 'bubbles', 'truchet', 'stars', 'lissajous', 'fireflies', 'aurora', 'grid', 'halftone', 'circuit', 'river', 'rust', 'snow', 'radar', 'glass'] as const
 
 const ART_LOADERS: Record<typeof ART_TYPES[number], () => Promise<any>> = {
   plum: () => import('./ArtPlum.vue'),
@@ -98,6 +98,7 @@ const ART_LOADERS: Record<typeof ART_TYPES[number], () => Promise<any>> = {
   rust: () => import('./ArtRust.vue'),
   snow: () => import('./ArtSnow.vue'),
   radar: () => import('./ArtRadar.vue'),
+  glass: () => import('./ArtGlass.vue'),
 }
 
 // Exposed as `data-art` on the rendered background so the active variant is
