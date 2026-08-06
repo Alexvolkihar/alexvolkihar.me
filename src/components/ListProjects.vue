@@ -14,7 +14,7 @@ function slug(name: string) {
     <div class="prose pb5 mx-auto mt10 text-center">
       <div flex="~ gap-2 justify-center">
         <a
-          href="https://github.com/antfu"
+          href="https://github.com/alexvolkihar"
           target="_blank"
           class="group btn-blue inline-block"
         >
@@ -24,7 +24,7 @@ function slug(name: string) {
           />
           GitHub
         </a>
-        <a
+        <!-- <a
           href="https://releases.antfu.me"
           target="_blank"
           class="group btn-amber inline-block"
@@ -45,7 +45,7 @@ function slug(name: string) {
             group-hover="i-ph-cow-duotone-fill text-lime"
           />
           Yak Map
-        </a>
+        </a> -->
       </div>
       <hr>
     </div>
@@ -95,7 +95,7 @@ function slug(name: string) {
     </div>
     <div class="prose pb5 mx-auto mt10 text-center">
       <div block mt-5>
-        <a href="https://antfu.me/stars-rank" target="_blank" op50>All projects sort by Stars</a>
+        <a href="/stars-rank" target="_blank" op50>All projects sort by Stars</a>
       </div>
       <!-- <hr>
       <SponsorButtons /> -->
