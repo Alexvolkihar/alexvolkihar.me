@@ -73,7 +73,7 @@ onMounted(() => {
   }, 1)
 })
 
-const ART_TYPES = ['plum', 'dots', 'field', 'orbit', 'wave', 'constellation', 'rain', 'spiral', 'ripple', 'bubbles', 'truchet', 'stars', 'lissajous', 'fireflies', 'aurora', 'grid', 'halftone', 'circuit', 'river', 'rust', 'snow', 'radar', 'glass', 'pendulum', 'kaleidoscope'] as const
+const ART_TYPES = ['plum', 'dots', 'field', 'orbit', 'wave', 'constellation', 'rain', 'spiral', 'ripple', 'bubbles', 'truchet', 'stars', 'lissajous', 'fireflies', 'aurora', 'grid', 'halftone', 'circuit', 'river', 'rust', 'snow', 'radar', 'glass', 'kaleidoscope'] as const
 
 const ART_LOADERS: Record<typeof ART_TYPES[number], () => Promise<any>> = {
   plum: () => import('./ArtPlum.vue'),
@@ -99,7 +99,6 @@ const ART_LOADERS: Record<typeof ART_TYPES[number], () => Promise<any>> = {
   snow: () => import('./ArtSnow.vue'),
   radar: () => import('./ArtRadar.vue'),
   glass: () => import('./ArtGlass.vue'),
-  pendulum: () => import('./ArtPendulum.vue'),
   kaleidoscope: () => import('./ArtKaleidoscope.vue'),
 }
 
