@@ -1,7 +1,6 @@
 ---
 title: Alexis Mabanza
 description: Alexis Mabanza's Portfolio
-image: https://antfu.me/og.png
 art: random
 ---
 
@@ -34,7 +33,7 @@ Find me on
   <!-- <a href="https://chat.antfu.me" target="_blank"><span op75 i-simple-icons-discord /> Discord Server</a>
  <a href="https://x.com/antfu7" target="_blank"><span op75 i-ri-twitter-x-fill /> Twitter</a>
   <a href="https://x.com/antfuzh" target="_blank"><span op75 i-ri-twitter-x-fill /> 中文推</a> -->
-  <a href="https://x.com/antfujp" target="_blank"><span op75 i-ri-twitter-x-fill /> 日本語</a>
+  <!-- <a href="https://x.com/antfujp" target="_blank"><span op75 i-ri-twitter-x-fill /> 日本語</a> -->
 </p>
 
 Or mail me at <span font-mono>hi<span i-carbon-at/>alexvolkihar.ovh</span>

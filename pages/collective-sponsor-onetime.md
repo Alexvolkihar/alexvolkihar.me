@@ -3,6 +3,11 @@ title: Collective Sponsorship
 display: ''
 ---
 
+<!--
+This page was inherited from the antfu.me fork. It implements Anthony Fu's
+Open Collective sponsorship-forwarding program, which has no equivalent here,
+so the whole thing is disabled rather than left live under my name.
+
 <script setup>
 import { useRoute } from 'vue-router'
 import { computed, nextTick } from 'vue'
@@ -59,3 +64,9 @@ Also note that if you are trying to apply for one, it usually requires to link t
 We will do this sponsorship on a monthly basis, with a post each month to announce the sponsorships and introducing the contributors and their work. For example, like [this one we had for April 2024](https://opencollective.com/antfu/updates/anthony-collective-redistribution-april-2024). If you have anything you'd like us to mention in the post, feel free to let us know!
 
 Thank you again for your amazing work and contributions to open source! 🙏 💖
+-->
+
+<div op50 py8 text-center>
+  <div>Nothing here yet.</div>
+  <div text-sm mt1>Pas encore de contenu ici.</div>
+</div>
