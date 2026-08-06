@@ -73,23 +73,55 @@ onMounted(() => {
   }, 1)
 })
 
-const ArtComponent = computed(() => {
-  let art = frontmatter.art
+const ART_TYPES = ['plum', 'dots', 'field', 'orbit', 'wave', 'constellation', 'rain', 'spiral', 'ripple', 'bubbles', 'truchet', 'stars', 'lissajous', 'fireflies', 'aurora', 'grid', 'halftone', 'circuit', 'river', 'rust', 'snow', 'radar', 'glass', 'kaleidoscope'] as const
+
+const ART_LOADERS: Record<typeof ART_TYPES[number], () => Promise<any>> = {
+  plum: () => import('./ArtPlum.vue'),
+  dots: () => import('./ArtDots.vue'),
+  field: () => import('./ArtField.vue'),
+  orbit: () => import('./ArtOrbit.vue'),
+  wave: () => import('./ArtWave.vue'),
+  constellation: () => import('./ArtConstellation.vue'),
+  rain: () => import('./ArtRain.vue'),
+  spiral: () => import('./ArtSpiral.vue'),
+  ripple: () => import('./ArtRipple.vue'),
+  bubbles: () => import('./ArtBubbles.vue'),
+  truchet: () => import('./ArtTruchet.vue'),
+  stars: () => import('./ArtStars.vue'),
+  lissajous: () => import('./ArtLissajous.vue'),
+  fireflies: () => import('./ArtFireflies.vue'),
+  aurora: () => import('./ArtAurora.vue'),
+  grid: () => import('./ArtGrid.vue'),
+  halftone: () => import('./ArtHalftone.vue'),
+  circuit: () => import('./ArtCircuit.vue'),
+  river: () => import('./ArtRiver.vue'),
+  rust: () => import('./ArtRust.vue'),
+  snow: () => import('./ArtSnow.vue'),
+  radar: () => import('./ArtRadar.vue'),
+  glass: () => import('./ArtGlass.vue'),
+  kaleidoscope: () => import('./ArtKaleidoscope.vue'),
+}
+
+// Exposed as `data-art` on the rendered background so the active variant is
+// visible in devtools when `art: random` is in play.
+const resolvedArt = computed(() => {
+  const art = frontmatter.art
   if (art === 'random')
-    art = Math.random() > 0.5 ? 'plum' : 'dots'
-  if (typeof window !== 'undefined') {
-    if (art === 'plum')
-      return defineAsyncComponent(() => import('./ArtPlum.vue'))
-    else if (art === 'dots')
-      return defineAsyncComponent(() => import('./ArtDots.vue'))
-  }
-  return undefined
+    return ART_TYPES[Math.floor(Math.random() * ART_TYPES.length)]
+  return art as typeof ART_TYPES[number] | undefined
+})
+
+const ArtComponent = computed(() => {
+  if (typeof window === 'undefined' || !resolvedArt.value)
+    return undefined
+  const loader = ART_LOADERS[resolvedArt.value]
+  return loader ? defineAsyncComponent(loader) : undefined
 })
 </script>
 
 <template>
   <ClientOnly v-if="ArtComponent">
-    <component :is="ArtComponent" />
+    <component :is="ArtComponent" :data-art="resolvedArt" />
   </ClientOnly>
   <div
     v-if="frontmatter.display ?? frontmatter.title"
