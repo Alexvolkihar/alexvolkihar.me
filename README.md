@@ -1,6 +1,6 @@
-**[antfu.me](https://antfu.me)**
+**[alexvolkihar.me](https://alexvolkihar.me)**
 
-my personal website
+Alexis Mabanza's personal website
 
 <br>
 
