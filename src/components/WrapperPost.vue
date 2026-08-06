@@ -73,7 +73,7 @@ onMounted(() => {
   }, 1)
 })
 
-const ART_TYPES = ['plum', 'dots', 'field', 'orbit', 'wave', 'constellation', 'rain', 'spiral', 'ripple', 'bubbles', 'truchet', 'stars', 'lissajous', 'fireflies'] as const
+const ART_TYPES = ['plum', 'dots', 'field', 'orbit', 'wave', 'constellation', 'rain', 'spiral', 'ripple', 'bubbles', 'truchet', 'stars', 'lissajous', 'fireflies', 'aurora', 'grid'] as const
 
 const ArtComponent = computed(() => {
   let art = frontmatter.art
@@ -108,6 +108,10 @@ const ArtComponent = computed(() => {
       return defineAsyncComponent(() => import('./ArtLissajous.vue'))
     else if (art === 'fireflies')
       return defineAsyncComponent(() => import('./ArtFireflies.vue'))
+    else if (art === 'aurora')
+      return defineAsyncComponent(() => import('./ArtAurora.vue'))
+    else if (art === 'grid')
+      return defineAsyncComponent(() => import('./ArtGrid.vue'))
   }
   return undefined
 })
