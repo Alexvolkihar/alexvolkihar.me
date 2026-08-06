@@ -53,17 +53,22 @@ onMounted(() => {
   })
 
   useRafFn(() => {
-    ctx.fillStyle = 'rgba(128, 128, 128, 0.06)'
+    // Fade previous frame by eroding alpha (destination-out) instead of
+    // painting grey over it, otherwise the fill accumulates to full opacity
+    // within about a second and blacks out the whole background.
+    ctx.globalCompositeOperation = 'destination-out'
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.06)'
     ctx.fillRect(0, 0, size.width, size.height)
+    ctx.globalCompositeOperation = 'source-over'
 
-    ctx.fillStyle = '#88888899'
+    ctx.fillStyle = '#88888844'
     for (const p of particles) {
       p.angle += p.speed * 0.02
       const c = centers[p.center]
       const x = c.x + Math.cos(p.angle) * p.radius
       const y = c.y + Math.sin(p.angle) * p.radius * 0.6
       ctx.beginPath()
-      ctx.arc(x, y, 1.2, 0, Math.PI * 2)
+      ctx.arc(x, y, 1, 0, Math.PI * 2)
       ctx.fill()
     }
   })
