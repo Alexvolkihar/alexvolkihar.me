@@ -73,53 +73,51 @@ onMounted(() => {
   }, 1)
 })
 
-const ART_TYPES = ['plum', 'dots', 'field', 'orbit', 'wave', 'constellation', 'rain', 'spiral', 'ripple', 'bubbles', 'truchet', 'stars', 'lissajous', 'fireflies', 'aurora', 'grid'] as const
+const ART_TYPES = ['plum', 'dots', 'field', 'orbit', 'wave', 'constellation', 'rain', 'spiral', 'ripple', 'bubbles', 'truchet', 'stars', 'lissajous', 'fireflies', 'aurora', 'grid', 'halftone', 'circuit', 'river', 'rust'] as const
+
+const ART_LOADERS: Record<typeof ART_TYPES[number], () => Promise<any>> = {
+  plum: () => import('./ArtPlum.vue'),
+  dots: () => import('./ArtDots.vue'),
+  field: () => import('./ArtField.vue'),
+  orbit: () => import('./ArtOrbit.vue'),
+  wave: () => import('./ArtWave.vue'),
+  constellation: () => import('./ArtConstellation.vue'),
+  rain: () => import('./ArtRain.vue'),
+  spiral: () => import('./ArtSpiral.vue'),
+  ripple: () => import('./ArtRipple.vue'),
+  bubbles: () => import('./ArtBubbles.vue'),
+  truchet: () => import('./ArtTruchet.vue'),
+  stars: () => import('./ArtStars.vue'),
+  lissajous: () => import('./ArtLissajous.vue'),
+  fireflies: () => import('./ArtFireflies.vue'),
+  aurora: () => import('./ArtAurora.vue'),
+  grid: () => import('./ArtGrid.vue'),
+  halftone: () => import('./ArtHalftone.vue'),
+  circuit: () => import('./ArtCircuit.vue'),
+  river: () => import('./ArtRiver.vue'),
+  rust: () => import('./ArtRust.vue'),
+}
+
+// Exposed as `data-art` on the rendered background so the active variant is
+// visible in devtools when `art: random` is in play.
+const resolvedArt = computed(() => {
+  const art = frontmatter.art
+  if (art === 'random')
+    return ART_TYPES[Math.floor(Math.random() * ART_TYPES.length)]
+  return art as typeof ART_TYPES[number] | undefined
+})
 
 const ArtComponent = computed(() => {
-  let art = frontmatter.art
-  if (art === 'random')
-    art = ART_TYPES[Math.floor(Math.random() * ART_TYPES.length)]
-  if (typeof window !== 'undefined') {
-    if (art === 'plum')
-      return defineAsyncComponent(() => import('./ArtPlum.vue'))
-    else if (art === 'dots')
-      return defineAsyncComponent(() => import('./ArtDots.vue'))
-    else if (art === 'field')
-      return defineAsyncComponent(() => import('./ArtField.vue'))
-    else if (art === 'orbit')
-      return defineAsyncComponent(() => import('./ArtOrbit.vue'))
-    else if (art === 'wave')
-      return defineAsyncComponent(() => import('./ArtWave.vue'))
-    else if (art === 'constellation')
-      return defineAsyncComponent(() => import('./ArtConstellation.vue'))
-    else if (art === 'rain')
-      return defineAsyncComponent(() => import('./ArtRain.vue'))
-    else if (art === 'spiral')
-      return defineAsyncComponent(() => import('./ArtSpiral.vue'))
-    else if (art === 'ripple')
-      return defineAsyncComponent(() => import('./ArtRipple.vue'))
-    else if (art === 'bubbles')
-      return defineAsyncComponent(() => import('./ArtBubbles.vue'))
-    else if (art === 'truchet')
-      return defineAsyncComponent(() => import('./ArtTruchet.vue'))
-    else if (art === 'stars')
-      return defineAsyncComponent(() => import('./ArtStars.vue'))
-    else if (art === 'lissajous')
-      return defineAsyncComponent(() => import('./ArtLissajous.vue'))
-    else if (art === 'fireflies')
-      return defineAsyncComponent(() => import('./ArtFireflies.vue'))
-    else if (art === 'aurora')
-      return defineAsyncComponent(() => import('./ArtAurora.vue'))
-    else if (art === 'grid')
-      return defineAsyncComponent(() => import('./ArtGrid.vue'))
-  }
-  return undefined
+  if (typeof window === 'undefined' || !resolvedArt.value)
+    return undefined
+  const loader = ART_LOADERS[resolvedArt.value]
+  return loader ? defineAsyncComponent(loader) : undefined
 })
 </script>
 
 <template>
   <ClientOnly v-if="ArtComponent">
-    <component :is="ArtComponent" />
+    <component :is="ArtComponent" :data-art="resolvedArt" />
   </ClientOnly>
   <div
     v-if="frontmatter.display ?? frontmatter.title"
