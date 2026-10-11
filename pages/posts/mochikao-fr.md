@@ -5,7 +5,7 @@ lang: fr
 art: random
 image: /images/mochikao-home.png
 duration: 6min
-description: mochikao transforme n'importe quelle chaîne en un petit personnage SVG, toujours le même. Comment ça marche, pourquoi il reste petit, et comment je le publie sur npm.
+description: mochikao transforme n'importe quelle chaîne en un petit personnage SVG, toujours le même. Comment ça marche, pourquoi il reste petit, et quelles sont ses limites.
 ---
 
 > [English Version](/posts/mochikao) | [日本語版](/posts/mochikao-ja)
@@ -98,20 +98,6 @@ import { Mochikao } from 'mochikao/react';
 ```
 
 La même API existe pour Vue, Svelte, Solid, un web component, un point d'accès HTTP (`/api/<nom>.svg`) et un CLI.
-
-## La publication
-
-Le paquet est publié depuis GitHub Actions avec le *trusted publishing* de npm : le workflow prouve son identité à npm par OIDC, donc aucun jeton npm n'est stocké nulle part, et chaque version porte une attestation de provenance.
-
-Le workflow se contente de lancer `npm stage publish`, qui met la version dans une file d'attente : un workflow compromis ne peut donc pas publier seul. Rien n'est en ligne tant que je ne l'ai pas approuvée avec mon second facteur.
-
-```bash
-npm version patch
-git push --follow-tags     # le workflow met la version en file
-npm stage approve <id>     # j'approuve avec la 2FA
-```
-
-Ça ajoute quelques secondes par version, en échange d'un contrôle humain à chaque publication.
 
 ## Limites
 

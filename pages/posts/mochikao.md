@@ -5,7 +5,7 @@ lang: en
 art: random
 image: /images/mochikao-home.png
 duration: 6min
-description: mochikao turns any string into a small SVG character, the same one every time. How it works, why it stays small, and how I publish it to npm.
+description: mochikao turns any string into a small SVG character, the same one every time. How it works, why it stays small, and what its limits are.
 ---
 
 > [Version Française](/posts/mochikao-fr) | [日本語版](/posts/mochikao-ja)
@@ -98,20 +98,6 @@ import { Mochikao } from 'mochikao/react';
 ```
 
 The same API exists for Vue, Svelte, Solid, a web component, an HTTP endpoint (`/api/<name>.svg`) and a CLI.
-
-## Shipping it
-
-The package is published from GitHub Actions with npm's trusted publishing: the workflow proves its identity to npm through OIDC, so there is no npm token stored anywhere, and each version carries a provenance attestation.
-
-The workflow only runs `npm stage publish`, which puts the version in a queue, so a compromised workflow cannot publish on its own. Nothing goes live until I approve it with my second factor.
-
-```bash
-npm version patch
-git push --follow-tags     # the workflow stages the release
-npm stage approve <id>     # I approve with 2FA
-```
-
-It adds a few seconds per release, in exchange for a human check on every version.
 
 ## Limits
 
