@@ -5,7 +5,7 @@ lang: ja
 art: random
 image: /images/mochikao-home.png
 duration: 6min
-description: mochikaoは、どんな文字列も小さなSVGキャラクターに変える。同じ文字列からは、いつも同じ顔ができる。仕組み、小さく保つ理由、npmへの公開方法をまとめた。
+description: mochikaoは、どんな文字列も小さなSVGキャラクターに変える。同じ文字列からは、いつも同じ顔ができる。仕組み、小さく保つ理由、制限をまとめた。
 ---
 
 > [English Version](/posts/mochikao) | [Version Française](/posts/mochikao-fr)
@@ -92,20 +92,6 @@ mochikao({ name: 'alex', family: animals });
 フレームワーク用のコンポーネントも同じ考え方だ。アニメーションがなければ、`<Mochikao>`はdata URIの素の`<img>`を描画する。DOMノードは約20個ではなく1個で、長いリストで効いてくる。`animate`を指定するとインラインSVGに切り替わる。アニメーションに必要だからだ。
 
 Vue、Svelte、Solid、Webコンポーネント、HTTPエンドポイント（`/api/<name>.svg`）、CLIにも同じAPIがある。
-
-## 公開
-
-パッケージはGitHub Actionsから、npmのtrusted publishingで公開している。ワークフローはOIDCでnpmに身元を証明するので、npmのトークンはどこにも保存されていない。各バージョンにはprovenance（出所の証明）が付く。
-
-ワークフローが実行するのは`npm stage publish`だけで、バージョンはキューに入る。そのため、侵害されたワークフローが単独で公開することはできない。私が第2要素で承認するまで、何も公開されない。
-
-```bash
-npm version patch
-git push --follow-tags     # ワークフローがリリースをキューに入れる
-npm stage approve <id>     # 2FAで承認する
-```
-
-リリースごとに数秒かかるが、そのぶん毎回人間の確認が入る。
 
 ## 制限
 
