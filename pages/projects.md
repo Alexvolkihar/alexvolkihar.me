@@ -6,6 +6,10 @@ wrapperClass: 'text-center'
 art: dots
 projects:
   Current Focus:
+    - name: 'mochikao'
+      link: '/posts/mochikao'
+      desc: 'Deterministic avatars: any string becomes a cute, unique SVG character. Zero dependencies.'
+      icon: 'i-mdi-emoticon-happy-outline'
     - name: 'MovieCrush'
       link: '#'
       desc: 'MovieCrush Sunshine - A movie tracking and recommendation web application.'

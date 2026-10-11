@@ -479,6 +479,27 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/posts/mochikao': RouteRecordInfo<
+      '/posts/mochikao',
+      '/posts/mochikao',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/posts/mochikao-fr': RouteRecordInfo<
+      '/posts/mochikao-fr',
+      '/posts/mochikao-fr',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/posts/mochikao-ja': RouteRecordInfo<
+      '/posts/mochikao-ja',
+      '/posts/mochikao-ja',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/posts/move-on-to-esm-only': RouteRecordInfo<
       '/posts/move-on-to-esm-only',
       '/posts/move-on-to-esm-only',
@@ -1244,6 +1265,24 @@ declare module 'vue-router/auto-routes' {
     'pages/posts/mental-health-oss-zh.md': {
       routes:
         | '/posts/mental-health-oss-zh'
+      views:
+        | never
+    }
+    'pages/posts/mochikao.md': {
+      routes:
+        | '/posts/mochikao'
+      views:
+        | never
+    }
+    'pages/posts/mochikao-fr.md': {
+      routes:
+        | '/posts/mochikao-fr'
+      views:
+        | never
+    }
+    'pages/posts/mochikao-ja.md': {
+      routes:
+        | '/posts/mochikao-ja'
       views:
         | never
     }
