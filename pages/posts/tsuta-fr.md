@@ -46,11 +46,19 @@ Un test fait l'aller-retour sur un vrai dépôt : indexer le premier hunk, en d�
 
 L'indexation partielle exige le diff exact : elle est désactivée tant que « masquer les changements d'espaces » est activé.
 
+Un fichier neuf est le seul cas que git ne sait pas encore diffuser. Tsuta l'enregistre en « intent to add » (`git add --intent-to-add`), ce qui en fait un diff ordinaire de lignes ajoutées, et le même constructeur de patch fait le reste. Rien n'est indexé tant que tu n'appliques pas une ligne. Abandonner un tel fichier oublie d'abord l'entrée, car le restaurer depuis l'index le viderait.
+
 ## Rebaser sans éditeur
 
 Git ouvre un éditeur pour la liste des tâches, puis un autre à chaque reword. Tsuta remplace les deux. `GIT_SEQUENCE_EDITOR` pointe vers un `cp` d'un fichier que l'app a écrit, et un `reword` devient un `pick` suivi de `exec git commit --amend -F <fichier>`.
 
 La fenêtre de rebase est une liste qu'on réordonne en glissant, avec pick, reword, squash, fixup et drop sur chaque ligne. Elle refuse un plan qui commence par un squash, puisqu'il n'y a aucun commit dans lequel fusionner.
+
+## Blame, historique et annulation
+
+Le blame, c'est `git blame --porcelain`, découpé en lignes groupées par commit, les lignes non commitées étant signalées. L'historique d'un fichier lance `git log --follow` deux fois : une pour les commits, une avec `--name-only` pour savoir quel nom portait le fichier à chaque commit, afin de lire le diff d'un ancien commit sous le bon chemin. Un clic sur une ligne du blame ouvre ce commit dans l'historique.
+
+L'annulation part d'un instantané pris avant toute opération qui peut déplacer HEAD (rebase, merge, pull, reset, cherry-pick, revert, amend) : le commit, la branche et l'arbre de l'index (`git write-tree`). Annuler un rebase, un merge ou un pull, c'est `git reset --keep` vers l'ancien commit, qui conserve les changements non commités et s'arrête s'ils entrent en conflit. Annuler un reset ou un amend, c'est `git reset --soft` suivi d'un `git read-tree` de l'index sauvegardé : ce que tu avais indexé l'est de nouveau. Elle refuse si HEAD n'est plus là où l'action l'a laissé, ou si tu as changé de branche.
 
 ## Le graphe
 
@@ -78,15 +86,14 @@ La seconde est l'onglet Agents, qui liste les conversations menées dans le dép
 
 ## Sans Xcode
 
-Je l'ai construit avec les seuls Command Line Tools, ce qui a coûté trois choses : pas de XCTest, pas de macros swift-testing, et pas de macro `@State`, dont le plugin est livré avec Xcode. Les tests sont devenus un exécutable, `tsuta-selftest` : 114 vérifications qui créent de vrais dépôts (un merge avec conflit, un rebase interactif, un stash, un worktree, de l'indexation partielle). L'état local des vues passe par `@StateObject`.
+Je l'ai construit avec les seuls Command Line Tools, ce qui a coûté trois choses : pas de XCTest, pas de macros swift-testing, et pas de macro `@State`, dont le plugin est livré avec Xcode. Les tests sont devenus un exécutable, `tsuta-selftest` : 148 vérifications qui créent de vrais dépôts (un merge avec conflit, un rebase interactif, un stash, un worktree, de l'indexation partielle, un blame à travers un renommage, l'annulation d'un rebase). L'état local des vues passe par `@StateObject`.
 
 ## Limites
 
 - L'app n'est pas notarisée.
 - Les chemins GitLab (`glab`) et Codex sont couverts par des tests de parsing sur des sorties d'exemple. Je ne les ai pas exécutés contre les vrais outils.
-- Il n'y a ni blame ni historique d'un fichier.
-- Un fichier non suivi ne peut être indexé qu'en entier.
-- L'annulation couvre les commits et les fichiers abandonnés, pas les rebases ni les resets.
-- Cela fait environ 5 200 lignes de Swift, dont 1 400 dans le cœur. Il reste des aspérités.
+- Le blame ne suit pas les lignes déplacées d'un fichier à l'autre.
+- L'annulation ne fonctionne que tant que le dépôt est là où l'action l'a laissé, sur la même branche. Sinon, elle refuse.
+- Cela fait environ 5 800 lignes de Swift, dont 1 600 dans le cœur. Il reste des aspérités.
 
 Le code est sur [GitHub](https://github.com/Alexvolkihar/Tsuta), sous licence MIT.

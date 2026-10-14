@@ -46,11 +46,19 @@ A test does the round trip on a real repository: stage the first hunk, unstage o
 
 Partial staging needs the exact diff, so it is disabled while "hide whitespace changes" is on.
 
+A new file is the one case git cannot diff yet. Tsuta records it as intent to add (`git add --intent-to-add`), which turns it into an ordinary diff of added lines, and the same patch builder does the rest. Nothing is staged until you apply a line. Discarding such a file forgets the entry first, because restoring it from the index would empty the file.
+
 ## Rebase without an editor
 
 Git opens an editor for the todo list, and another for every reword. Tsuta replaces both. `GIT_SEQUENCE_EDITOR` points to a `cp` of a todo file the app wrote, and a `reword` becomes a `pick` followed by `exec git commit --amend -F <file>`.
 
 The rebase window is a list you reorder by dragging, with pick, reword, squash, fixup and drop on each line. It refuses a plan that starts with a squash, since there is no commit to squash into.
+
+## Blame, history and undo
+
+Blame is `git blame --porcelain`, parsed into lines grouped by commit, with the uncommitted ones marked. The file history runs `git log --follow` twice: once for the commits, once with `--name-only` to learn which name the file had at each commit, so the diff of an old commit is read under the right path. A click on a blame line opens that commit in the history.
+
+Undo starts from a snapshot taken before any operation that can move HEAD (rebase, merge, pull, reset, cherry-pick, revert, amend): the commit, the branch and the index tree (`git write-tree`). Undoing a rebase, a merge or a pull is `git reset --keep` to the old commit, which keeps uncommitted changes and stops if they conflict. Undoing a reset or an amend is `git reset --soft` followed by `git read-tree` of the saved index, so what you had staged is staged again. It refuses when HEAD is no longer where the action left it, or when you changed branch.
 
 ## The graph
 
@@ -78,15 +86,14 @@ The second is the Agents tab, which lists the conversations that worked in the r
 
 ## No Xcode
 
-I built it with the Command Line Tools only, and that cost three things: no XCTest, no swift-testing macros, and no `@State` macro, whose plugin ships with Xcode. The tests became an executable, `tsuta-selftest`: 114 checks that create real repositories (a merge with a conflict, an interactive rebase, a stash, a worktree, partial staging). Local view state uses `@StateObject`.
+I built it with the Command Line Tools only, and that cost three things: no XCTest, no swift-testing macros, and no `@State` macro, whose plugin ships with Xcode. The tests became an executable, `tsuta-selftest`: 148 checks that create real repositories (a merge with a conflict, an interactive rebase, a stash, a worktree, partial staging, blame through a rename, undo of a rebase). Local view state uses `@StateObject`.
 
 ## Limits
 
 - The app is not notarized.
 - The GitLab (`glab`) and Codex paths are covered by parser tests on sample output. I have not run them against the real tools.
-- There is no blame and no file history.
-- An untracked file can only be staged whole.
-- Undo covers commits and discarded files, not rebases or resets.
-- It is about 5,200 lines of Swift, 1,400 of them in the core. Expect rough edges.
+- Blame does not follow lines moved between files.
+- Undo only works while the repository is where the action left it, on the same branch. Otherwise it refuses.
+- It is about 5,800 lines of Swift, 1,600 of them in the core. Expect rough edges.
 
 The code is on [GitHub](https://github.com/Alexvolkihar/Tsuta), MIT licensed.
