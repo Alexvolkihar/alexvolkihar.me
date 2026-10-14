@@ -6,6 +6,10 @@ wrapperClass: 'text-center'
 art: dots
 projects:
   Current Focus:
+    - name: 'Tsuta'
+      link: '/posts/tsuta'
+      desc: 'A native macOS Git client in Swift: commit graph, line-by-line staging, conflicts, interactive rebase, GitHub and GitLab reviews, Claude Code and Codex sessions.'
+      icon: 'i-mdi-source-branch'
     - name: 'mochikao'
       link: '/posts/mochikao'
       desc: 'Deterministic avatars: any string becomes a cute, unique SVG character. Zero dependencies.'
