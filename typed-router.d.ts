@@ -738,6 +738,27 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/posts/tsuta': RouteRecordInfo<
+      '/posts/tsuta',
+      '/posts/tsuta',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/posts/tsuta-fr': RouteRecordInfo<
+      '/posts/tsuta-fr',
+      '/posts/tsuta-fr',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/posts/tsuta-ja': RouteRecordInfo<
+      '/posts/tsuta-ja',
+      '/posts/tsuta-ja',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/posts/type-inferencing-in-vue': RouteRecordInfo<
       '/posts/type-inferencing-in-vue',
       '/posts/type-inferencing-in-vue',
@@ -1487,6 +1508,24 @@ declare module 'vue-router/auto-routes' {
     'pages/posts/sponsorship-forwarding.md': {
       routes:
         | '/posts/sponsorship-forwarding'
+      views:
+        | never
+    }
+    'pages/posts/tsuta.md': {
+      routes:
+        | '/posts/tsuta'
+      views:
+        | never
+    }
+    'pages/posts/tsuta-fr.md': {
+      routes:
+        | '/posts/tsuta-fr'
+      views:
+        | never
+    }
+    'pages/posts/tsuta-ja.md': {
+      routes:
+        | '/posts/tsuta-ja'
       views:
         | never
     }
