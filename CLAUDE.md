@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Personal website/blog (fork of antfu.me), built with Vue 3 + Vite + Vite-SSG as a fully static site. Content lives as Markdown files that are auto-routed; there is no backend/API — everything ships as static HTML/JS at build time.
+Personal website/blog (fork of antfu.me), built with Vue 3 + Vite + Vite-SSG as a fully static site. Content lives as Markdown files that are auto-routed; everything ships as static HTML/JS at build time; the only server code is the small owner-only genart admin in `api/` (see Deployment).
 
 ## Commands
 
@@ -59,6 +59,7 @@ Standalone `tsx`-run utilities invoked from `package.json` or ad hoc:
 
 ### Deployment
 
+- Production runs on Vercel. The only server code is the owner-only genart collection admin: Vercel Functions in `api/` with shared code in `server/genart-admin/` (see `docs/genart-admin.md`).
 - Static output goes to `dist/`. Netlify is the deploy target: `netlify.toml` plus `_redirects` at the repo root; the build step copies the generated `_dist_redirects` to `dist/_redirects`. There's also a minimal `vercel.json`.
 
 ## Content authoring conventions
