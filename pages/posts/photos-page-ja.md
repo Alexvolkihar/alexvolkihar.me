@@ -6,7 +6,7 @@ art: random
 duration: 3min
 ---
 
-> [English Version](/posts/photos-page) · [Version Française](/posts/photos-page-fr)
+> [English Version](/posts/photos-page) | [Version Française](/posts/photos-page-fr) | **日本語版**
 
 気づいた人もいるかもしれないけど、このサイトに[写真ページ](/photos)を追加した。前からやりたいと思っていたのに、なかなか手を付けられずにいたことのひとつ。
 

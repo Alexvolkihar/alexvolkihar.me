@@ -7,7 +7,7 @@ duration: 15min
 description: PHPによる実践的なリファクタリング例を通して、ヘキサゴナルアーキテクチャの理解・実装・習得を段階的に進める総合ガイド。
 ---
 
-> [English Version](/posts/hexagonal-architecture) · [Version Française](/posts/hexagonal-architecture-fr)
+> [English Version](/posts/hexagonal-architecture) | [Version Française](/posts/hexagonal-architecture-fr) | **日本語版**
 
 > スライド: [SPA](https://slides.alexvolkihar.ovh/2026/hexagonal-architecture/)（フランス<ruby>語<rt>ご</rt></ruby>のみ）
 >

@@ -52,27 +52,10 @@ function getGroupName(p: Post) {
   return getYear(p.date)
 }
 
-function toggleLanguageFilter(lang?: string) {
-  if (lang === 'fr') {
-    showFrenchPosts.value = !showFrenchPosts.value
-    englishOnly.value = false
-  }
-  else if (lang === 'ja') {
-    showJapanesePosts.value = !showJapanesePosts.value
-    englishOnly.value = false
-  }
-}
-
-function getLanguageTagClass(lang?: string) {
-  const active = lang === 'fr'
-    ? showFrenchPosts.value
-    : lang === 'ja'
-      ? showJapanesePosts.value
-      : true
-
-  return active
-    ? 'bg-zinc:15 text-zinc5'
-    : 'bg-zinc:8 text-zinc4 op60'
+// Labels of the translated posts, shown next to their title
+const LANG_LABELS: Record<string, string> = {
+  fr: 'Français',
+  ja: '日本語',
 }
 </script>
 
@@ -116,31 +99,16 @@ function getLanguageTagClass(lang?: string) {
           class="item block font-normal mb-6 mt-2 no-underline"
         >
           <li class="no-underline" flex="~ col md:row gap-2 md:items-center">
-            <div class="title text-lg leading-1.2em" flex="~ gap-2 wrap">
+            <div class="title text-lg leading-1.2em" relative flex="~ gap-2 wrap">
               <span
                 v-if="route.lang === 'zh'"
                 align-middle flex-none
                 class="text-xs bg-zinc:15 text-zinc5 rounded px-1 py-0.5 ml--12 mr2 my-auto hidden md:block"
               >中文</span>
-              <button
-                v-if="route.lang === 'fr'"
-                align-middle
-                flex-none
-                class="text-xs rounded px-1 py-0.5 ml--15 mr2 my-auto hidden md:block hover:opacity-100 opacity-90"
-                :class="getLanguageTagClass('fr')"
-                @click.stop.prevent="toggleLanguageFilter('fr')"
-              >
-                Français
-              </button>
-              <button
-                v-if="route.lang === 'ja'"
-                align-middle flex-none
-                class="text-xs rounded px-1 py-0.5 ml--15 mr2 my-auto hidden md:block hover:opacity-100 opacity-90"
-                :class="getLanguageTagClass('ja')"
-                @click.stop.prevent="toggleLanguageFilter('ja')"
-              >
-                日本語
-              </button>
+              <span
+                v-if="route.lang && LANG_LABELS[route.lang]"
+                class="text-xs bg-zinc:15 text-zinc5 rounded px-1 py-0.5 absolute right-full top-50% translate-y--50% mr4 ws-nowrap hidden md:block"
+              >{{ LANG_LABELS[route.lang] }}</span>
               <span align-middle>{{ route.title }}</span>
               <span
                 v-if="route.redirect"
@@ -181,25 +149,11 @@ function getLanguageTagClass(lang?: string) {
                 align-middle flex-none
                 class="text-xs bg-zinc:15 text-zinc5 rounded px-1 py-0.5 my-auto md:hidden"
               >中文</span>
-              <button
-                v-if="route.lang === 'fr'"
-                align-middle
-                flex-none
-                class="text-xs rounded px-1 py-0.5 my-auto md:hidden hover:opacity-100 opacity-90"
-                :class="getLanguageTagClass('fr')"
-                @click.stop.prevent="toggleLanguageFilter('fr')"
-              >
-                Français
-              </button>
-              <button
-                v-if="route.lang === 'ja'"
+              <span
+                v-if="route.lang && LANG_LABELS[route.lang]"
                 align-middle flex-none
-                class="text-xs rounded px-1 py-0.5 my-auto md:hidden hover:opacity-100 opacity-90"
-                :class="getLanguageTagClass('ja')"
-                @click.stop.prevent="toggleLanguageFilter('ja')"
-              >
-                日本語
-              </button>
+                class="text-xs bg-zinc:15 text-zinc5 rounded px-1 py-0.5 my-auto md:hidden"
+              >{{ LANG_LABELS[route.lang] }}</span>
             </div>
           </li>
           <div v-if="route.place" op50 text-sm hidden mt--2 md:block>

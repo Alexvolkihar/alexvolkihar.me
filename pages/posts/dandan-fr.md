@@ -8,7 +8,7 @@ duration: 7min
 description: Dandan est une police japonaise qui dessine elle-même les furigana au-dessus des mots en kanji, et les retire pour les niveaux du JLPT que tu connais déjà. Comment marchent les ligatures, ce que les navigateurs empêchent, et où elle se trompe.
 ---
 
-> [English Version](/posts/dandan) | [日本語版](/posts/dandan-ja)
+> [English Version](/posts/dandan) | **Version Française** | [日本語版](/posts/dandan-ja)
 
 [Dandan](https://dandan.alexvolkihar.ovh) est une police japonaise qui dessine les furigana au-dessus des mots en kanji. Tu lui donnes du texte brut, elle affiche les lectures, sans balise `<ruby>` et sans JavaScript. Elle connaît aussi les listes du JLPT : indique le niveau que tu as atteint, et les mots de ce niveau et des niveaux plus faciles perdent leur lecture. Les mots plus difficiles la gardent.
 

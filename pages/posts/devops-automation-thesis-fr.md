@@ -7,7 +7,7 @@ duration: 10min
 description: Un retour d'expérience technique et personnel sur l'automatisation du cycle de développement avec GitLab CI, Docker Swarm, et SonarQube.
 ---
 
-> [English Version](/posts/devops-automation-thesis) | [日本語版](/posts/devops-automation-thesis-ja)
+> [English Version](/posts/devops-automation-thesis) | **Version Française** | [日本語版](/posts/devops-automation-thesis-ja)
 
 Dans le développement logiciel, la vitesse de livraison et la qualité du code donnent souvent l'impression de deux forces contraires. Le business veut des fonctionnalités toujours plus vite, pendant que la stabilité opérationnelle demande de la rigueur et des garde-fous.
 

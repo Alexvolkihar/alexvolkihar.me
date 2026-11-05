@@ -22,7 +22,9 @@ async function renderDiagram() {
 
   const id = `mmd-${++renderId}`
   const { svg } = await mermaid.render(id, props.code)
-  root.value.innerHTML = svg
+  // The page may have changed (e.g. switching to another language) while rendering
+  if (root.value)
+    root.value.innerHTML = svg
 }
 
 onMounted(() => {

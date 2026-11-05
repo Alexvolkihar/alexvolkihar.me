@@ -4,6 +4,23 @@ export const isDark = useDark()
 export const englishOnly = useLocalStorage('antfu-english-only', false)
 export const showFrenchPosts = useLocalStorage('antfu-show-french-posts', true)
 export const showJapanesePosts = useLocalStorage('antfu-show-japanese-posts', true)
+/**
+ * Show or hide the French/Japanese posts. Leaving "English Only" from a
+ * language box shows English plus that language only, as the boxes displayed.
+ */
+export function toggleLanguagePosts(lang: 'fr' | 'ja') {
+  const shown = lang === 'fr' ? showFrenchPosts : showJapanesePosts
+  const other = lang === 'fr' ? showJapanesePosts : showFrenchPosts
+  if (englishOnly.value) {
+    englishOnly.value = false
+    shown.value = true
+    other.value = false
+  }
+  else {
+    shown.value = !shown.value
+  }
+}
+
 export const galleryView = useLocalStorage<'cover' | 'contain'>('antfu-gallery-view', 'cover')
 
 /**

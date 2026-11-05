@@ -8,7 +8,7 @@ duration: 6min
 description: mochikao transforme n'importe quelle chaîne en un petit personnage SVG, toujours le même. Comment ça marche, pourquoi il reste petit, et quelles sont ses limites.
 ---
 
-> [English Version](/posts/mochikao) | [日本語版](/posts/mochikao-ja)
+> [English Version](/posts/mochikao) | **Version Française** | [日本語版](/posts/mochikao-ja)
 
 [mochikao](https://github.com/Alexvolkihar/mochikao) transforme n'importe quelle chaîne (un pseudo, un e-mail, un id) en un petit personnage SVG. La même chaîne donne toujours le même personnage, sur le serveur, dans le navigateur, dans un script. Pas d'appel réseau, pas de stockage, pas d'état.
 

@@ -7,7 +7,7 @@ duration: 7min
 description: Federico Bartoliの「The Canon」は、AIコーディングエージェントと働くための12のルールを示す。医療ソフトウェア向けにSymfonyを書く日々が、その一つひとつに同意させた。
 ---
 
-> [English Version](/posts/canon-ai-coding-agents) | [Version Française](/posts/canon-ai-coding-agents-fr)
+> [English Version](/posts/canon-ai-coding-agents) | [Version Française](/posts/canon-ai-coding-agents-fr) | **日本語版**
 
 <ruby>数日<rt>すうじつ</rt></ruby><ruby>前<rt>まえ</rt></ruby>、Federico Bartoliの [*The Canon*](https://federicobartoli.it/canon/) を<ruby>読<rt>よ</rt></ruby>んだ。AIコーディングエージェントと<ruby>働<rt>はたら</rt></ruby>くための12の<ruby>原則<rt>げんそく</rt></ruby>をまとめた、<ruby>短<rt>みじか</rt></ruby>いマニフェストだ。<ruby>文章<rt>ぶんしょう</rt></ruby>は<ruby>引<rt>ひ</rt></ruby>き<ruby>締<rt>し</rt></ruby>まっていて<ruby>主張<rt>しゅちょう</rt></ruby>もはっきりしていて、<ruby>冒頭<rt>ぼうとう</rt></ruby>と<ruby>同<rt>おな</rt></ruby>じ<ruby>一文<rt>いちぶん</rt></ruby>で<ruby>締<rt>し</rt></ruby>めくくられる。「どれも<ruby>新<rt>あたら</rt></ruby>しい<ruby>話<rt>はなし</rt></ruby>ではない。だが<ruby>今<rt>いま</rt></ruby>や、すべて<ruby>必須<rt>ひっす</rt></ruby>だ」。<ruby>続<rt>つづ</rt></ruby>けて2<ruby>回<rt>かい</rt></ruby><ruby>読<rt>よ</rt></ruby>み<ruby>返<rt>かえ</rt></ruby>した。<ruby>私<rt>わたし</rt></ruby>にとって、エンジニアリングの<ruby>規律<rt>きりつ</rt></ruby>について<ruby>書<rt>か</rt></ruby>かれた<ruby>文章<rt>ぶんしょう</rt></ruby>が<ruby>本物<rt>ほんもの</rt></ruby>かどうかを<ruby>測<rt>はか</rt></ruby>る、いちばんの<ruby>目安<rt>めやす</rt></ruby>だ。
 

@@ -8,7 +8,7 @@ duration: 7min
 description: TsutaはSwiftで書いたmacOSネイティブのGitクライアント。システムのgitを呼び出し、行単位でステージし、エディタなしでリベースし、Claude CodeとCodexのセッションを一覧にする。仕組みと、できないことをまとめた。
 ---
 
-> [English Version](/posts/tsuta) | [Version Française](/posts/tsuta-fr)
+> [English Version](/posts/tsuta) | [Version Française](/posts/tsuta-fr) | **日本語版**
 
 [Tsuta](https://github.com/Alexvolkihar/Tsuta)は、Swiftで書いたmacOS用のGitクライアントだ。履歴をグラフで描き、ハンクや1行単位でステージし、コンフリクトを解決し、対話的にリベースし、GitHubとGitLabのレビュー依頼を読み、リポジトリで行われたClaude CodeとCodexの会話を一覧にする。バイナリは4MB、ライセンスはMIT、アカウントは要らない。
 

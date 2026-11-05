@@ -7,7 +7,7 @@ duration: 7min
 description: « The Canon » de Federico Bartoli pose douze règles pour travailler avec des agents de code IA. Écrire du Symfony pour du logiciel médical m'a fait adhérer à chacune d'entre elles.
 ---
 
-> [English Version](/posts/canon-ai-coding-agents) | [日本語版](/posts/canon-ai-coding-agents-ja)
+> [English Version](/posts/canon-ai-coding-agents) | **Version Française** | [日本語版](/posts/canon-ai-coding-agents-ja)
 
 Il y a quelques jours, j'ai lu [*The Canon*](https://federicobartoli.it/canon/) de Federico Bartoli, un court manifeste qui pose douze règles pour travailler avec des agents de code IA. C'est dense, tranché, et ça se referme sur la phrase qui l'ouvre : « Aucune de ces règles n'est nouvelle. Toutes sont désormais obligatoires. » Je l'ai lu deux fois d'affilée, ce qui, pour moi, est le vrai test pour savoir si un texte sur la discipline en ingénierie vaut quelque chose.
 

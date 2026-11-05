@@ -8,7 +8,7 @@ duration: 13min
 description: このサイトのジェネラティブアートのセクションの仕組みをまとめた。すべての作品は一つのハッシュから生まれ、ルールはCamille Rouxさんのgenart skillに倣っている。14のシリーズを一つずつ平易に説明し、それぞれに描き直せるライブデモを付けた。
 ---
 
-> [English Version](/posts/genart) | [Version Française](/posts/genart-fr)
+> [English Version](/posts/genart) | [Version Française](/posts/genart-fr) | **日本語版**
 
 このサイトの[ジェネラティブアート](/genart)のセクションには14のシリーズがある。シリーズはそれぞれ小さなプログラムで、作品はそのプログラムを一つのハッシュで実行したものだ。作品は画像としてどこにも保存されていない。ページを開くと、ブラウザがCanvas 2Dで、ライブラリなしで描く。
 

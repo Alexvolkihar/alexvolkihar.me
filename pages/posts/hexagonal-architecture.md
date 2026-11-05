@@ -7,7 +7,7 @@ duration: 15min
 description: A comprehensive, progressive guide to understanding, implementing, and mastering hexagonal architecture in PHP through a practical refactoring example.
 ---
 
-> [Version Française](/posts/hexagonal-architecture-fr) · [日本語版](/posts/hexagonal-architecture-ja)
+> **English Version** | [Version Française](/posts/hexagonal-architecture-fr) | [日本語版](/posts/hexagonal-architecture-ja)
 
 > Slides: [SPA](https://slides.alexvolkihar.ovh/2026/hexagonal-architecture/) (French only)
 >

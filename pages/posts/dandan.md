@@ -8,7 +8,7 @@ duration: 7min
 description: Dandan is a Japanese font that draws furigana over kanji words by itself, and drops them for the JLPT levels you already know. How the ligatures work, what browsers get in the way of, and where it guesses wrong.
 ---
 
-> [Version Française](/posts/dandan-fr) | [日本語版](/posts/dandan-ja)
+> **English Version** | [Version Française](/posts/dandan-fr) | [日本語版](/posts/dandan-ja)
 
 [Dandan](https://dandan.alexvolkihar.ovh) is a Japanese font that draws furigana above kanji words. You give it plain text and it shows the readings, with no `<ruby>` markup and no JavaScript. It also knows the JLPT lists: tell it which level you have reached, and the words of that level and the easier ones lose their readings. The harder words keep them.
 

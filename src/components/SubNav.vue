@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router/auto'
-import { englishOnly, showFrenchPosts, showJapanesePosts } from '../logics'
+import { englishOnly, showFrenchPosts, showJapanesePosts, toggleLanguagePosts } from '../logics'
 
 const inactiveStyle = 'opacity-20 hover:opacity-50'
 const activeStyle = 'opacity-100 underline'
@@ -21,9 +21,9 @@ const route = useRoute()
         items-center
         op30
         text-sm
-        @click="showFrenchPosts = !showFrenchPosts"
+        @click="toggleLanguagePosts('fr')"
       >
-        <div :i="showFrenchPosts ? 'carbon-checkbox-checked' : 'carbon-checkbox'" />
+        <div :i="showFrenchPosts && !englishOnly ? 'carbon-checkbox-checked' : 'carbon-checkbox'" />
         Français
       </button>
       <button
@@ -32,9 +32,9 @@ const route = useRoute()
         items-center
         op30
         text-sm
-        @click="showJapanesePosts = !showJapanesePosts"
+        @click="toggleLanguagePosts('ja')"
       >
-        <div :i="showJapanesePosts ? 'carbon-checkbox-checked' : 'carbon-checkbox'" />
+        <div :i="showJapanesePosts && !englishOnly ? 'carbon-checkbox-checked' : 'carbon-checkbox'" />
         日本語
       </button>
     </div>

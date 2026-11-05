@@ -8,7 +8,7 @@ duration: 6min
 description: mochikaoは、どんな文字列も小さなSVGキャラクターに変える。同じ文字列からは、いつも同じ顔ができる。仕組み、小さく保つ理由、制限をまとめた。
 ---
 
-> [English Version](/posts/mochikao) | [Version Française](/posts/mochikao-fr)
+> [English Version](/posts/mochikao) | [Version Française](/posts/mochikao-fr) | **日本語版**
 
 [mochikao](https://github.com/Alexvolkihar/mochikao)は、任意の文字列（ユーザー名、メールアドレス、ID）を小さなSVGキャラクターに変える。同じ文字列からは、サーバーでもブラウザでもスクリプトでも、いつも同じキャラクターができる。ネットワーク通信も、保存も、状態も要らない。
 

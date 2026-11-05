@@ -7,7 +7,7 @@ duration: 10min
 description: A technical and personal review of automating the software development lifecycle with GitLab CI, Docker Swarm, and SonarQube.
 ---
 
-> [Version Française](/posts/devops-automation-thesis-fr) | [日本語版](/posts/devops-automation-thesis-ja)
+> **English Version** | [Version Française](/posts/devops-automation-thesis-fr) | [日本語版](/posts/devops-automation-thesis-ja)
 
 In software development, delivery speed and code quality often feel like opposing forces. The business wants features faster and faster, while operational stability demands rigor and safeguards.
 

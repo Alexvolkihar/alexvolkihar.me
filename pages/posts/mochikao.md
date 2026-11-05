@@ -8,7 +8,7 @@ duration: 6min
 description: mochikao turns any string into a small SVG character, the same one every time. How it works, why it stays small, and what its limits are.
 ---
 
-> [Version Française](/posts/mochikao-fr) | [日本語版](/posts/mochikao-ja)
+> **English Version** | [Version Française](/posts/mochikao-fr) | [日本語版](/posts/mochikao-ja)
 
 [mochikao](https://github.com/Alexvolkihar/mochikao) turns any string (a username, an email, an ID) into a small SVG character. The same string always gives the same character, on the server, in the browser, in a script. There is no network call, no storage and no state.
 

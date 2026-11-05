@@ -1,13 +1,13 @@
 ---
 title: "SDLCの自動化：修士論文から得た教訓"
-date: 2026-06-06T00:00:00Z
+date: 2025-11-26T00:00:00Z
 lang: ja
 art: random
 duration: 10min
 description: GitLab CI、Docker Swarm、SonarQubeを使用したソフトウェア開発ライフサイクル（SDLC）の自動化に関する技術的・個人的なレビュー。
 ---
 
-> [English Version](/posts/devops-automation-thesis) | [Version Française](/posts/devops-automation-thesis-fr)
+> [English Version](/posts/devops-automation-thesis) | [Version Française](/posts/devops-automation-thesis-fr) | **日本語版**
 
 ソフトウェア開発では、リリースの速さとコードの品質は相反するものとして語られがちだ。ビジネス側はとにかく早く機能を出したい。一方で運用の安定性には、それなりの厳格さと安全策が要る。
 

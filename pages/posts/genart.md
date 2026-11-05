@@ -8,7 +8,7 @@ duration: 13min
 description: How the generative art section of this site works. Every piece comes from one hash, the rules come from Camille Roux's genart skill, and each of the fourteen series is explained in plain words with a live demo you can reseed.
 ---
 
-> [Version Française](/posts/genart-fr) | [日本語版](/posts/genart-ja)
+> **English Version** | [Version Française](/posts/genart-fr) | [日本語版](/posts/genart-ja)
 
 The [generative art](/genart) section of this site has fourteen series. Each series is a small program, and each piece is that program run on one hash. The pieces are not stored anywhere as images: your browser draws them when you open the page, with plain Canvas 2D and no library.
 

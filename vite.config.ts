@@ -275,6 +275,12 @@ export default defineConfig({
 
   ssgOptions: {
     formatting: 'minify',
+    // `useHead` in App.vue sets <html lang> in the browser only (the head is
+    // not rendered into the static pages), so write it here for fr/ja posts
+    onPageRendered(_route, html, { router }) {
+      const lang = (router.currentRoute.value.meta.frontmatter as { lang?: string } | undefined)?.lang
+      return lang ? html.replace(/<html lang="[^"]*"/, `<html lang="${lang}"`) : html
+    },
   },
 })
 

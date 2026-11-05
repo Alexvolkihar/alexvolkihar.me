@@ -7,7 +7,7 @@ duration: 18min
 description: Symfony UX Twig ComponentsとVue 3を並べながら、Atomic Designの理解・実装・活用を段階的に解説する包括ガイド。
 ---
 
-> [English Version](/posts/atomic-design) · [Version Française](/posts/atomic-design-fr)
+> [English Version](/posts/atomic-design) | [Version Française](/posts/atomic-design-fr) | **日本語版**
 
 > スライド： [SPA](https://slides.alexvolkihar.ovh/2026/atomic-design/)（フランス<ruby>語<rt>ご</rt></ruby>のみ）
 >

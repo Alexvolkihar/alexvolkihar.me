@@ -8,7 +8,7 @@ duration: 7min
 description: Dandanは、漢字の言葉の上にフォント自身がふりがなを描く日本語フォントだ。JLPTのレベルを指定すると、もう知っている言葉のふりがなを消す。合字の仕組み、ブラウザでできないこと、読みを間違える場面をまとめた。
 ---
 
-> [English Version](/posts/dandan) | [Version Française](/posts/dandan-fr)
+> [English Version](/posts/dandan) | [Version Française](/posts/dandan-fr) | **日本語版**
 
 [Dandan](https://dandan.alexvolkihar.ovh)は、漢字の言葉の上にふりがなを描く日本語フォントだ。普通のテキストを渡すだけで読みが出る。`<ruby>`タグもJavaScriptも使わない。さらにJLPTの語彙リストを持っていて、自分のレベルを指定すると、そのレベルとそれより易しいレベルの言葉からふりがなが消える。難しい言葉にはふりがなが残る。
 

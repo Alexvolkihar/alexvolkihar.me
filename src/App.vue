@@ -1,5 +1,14 @@
 <script setup lang="ts">
+import { useHead } from '@unhead/vue'
+
 const route = useRoute()
+
+// Posts come in en/fr/ja (and legacy zh) versions: follow the page's language
+useHead({
+  htmlAttrs: {
+    lang: computed(() => (route.meta.frontmatter as { lang?: string } | undefined)?.lang || 'en'),
+  },
+})
 
 const imageModel = ref<HTMLImageElement>()
 const imageAlt = ref<string>()
