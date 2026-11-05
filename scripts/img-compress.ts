@@ -4,7 +4,14 @@ import sharp from 'sharp'
 
 const maxSize = 1440
 
-export async function compressSharp(image: sharp.Sharp, inBuffer: Buffer, inFile: string, outFile: string) {
+export interface CompressOptions {
+  /** Longest allowed side, keeping the aspect ratio. Defaults to the width-only 1440px limit used for photos. */
+  longSide?: number
+  /** Re-encode to this format instead of keeping the input one. */
+  format?: 'jpeg' | 'png' | 'webp'
+}
+
+export async function compressSharp(image: sharp.Sharp, inBuffer: Buffer, inFile: string, outFile: string, options: CompressOptions = {}) {
   const { format, width, height } = await image.metadata()
   if (!format)
     throw new Error(`Could not determine format of ${inFile}`)
@@ -16,11 +23,17 @@ export async function compressSharp(image: sharp.Sharp, inBuffer: Buffer, inFile
   // Bake EXIF orientation into pixel data so we can safely strip all metadata below
   image = image.rotate()
 
-  if (width > maxSize || height > maxSize)
+  if (options.longSide) {
+    if (width > options.longSide || height > options.longSide)
+      image = image.resize({ width: options.longSide, height: options.longSide, fit: 'inside' })
+  }
+  else if (width > maxSize || height > maxSize) {
     image = image.resize(maxSize)
+  }
 
-  image = image[format]({
-    quality: format === 'png' ? 100 : 80,
+  const outFormat = options.format ?? format
+  image = image[outFormat]({
+    quality: outFormat === 'png' ? 100 : 80,
     compressionLevel: 9,
   })
 
