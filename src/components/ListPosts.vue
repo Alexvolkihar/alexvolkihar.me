@@ -25,10 +25,16 @@ const routes: Post[] = router.getRoutes()
     place: i.meta.frontmatter.place,
   }))
 
+// The language filters depend on the visitor (saved choice or browser language), which the
+// static build cannot know: render the full list first so hydration matches, then filter.
+const mounted = useMounted()
+
 const posts = computed(() =>
   [...(props.posts || routes), ...props.extra || []]
     .sort((a, b) => +new Date(normalizeDateInput(b.date)) - +new Date(normalizeDateInput(a.date)))
     .filter((i) => {
+      if (!mounted.value)
+        return true
       if (englishOnly.value)
         return !i.lang || i.lang === 'en'
       if (i.lang === 'fr' && !showFrenchPosts.value)

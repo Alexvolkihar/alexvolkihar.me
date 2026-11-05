@@ -6,13 +6,20 @@ const inactiveStyle = 'opacity-20 hover:opacity-50'
 const activeStyle = 'opacity-100 underline'
 
 const route = useRoute()
+
+// Same rule as ListPosts: show the build-time state until mounted, then the visitor's, so the
+// boxes update after hydration instead of keeping the static HTML's state.
+const mounted = useMounted()
+const englishBox = computed(() => mounted.value && englishOnly.value)
+const frenchBox = computed(() => !mounted.value || (showFrenchPosts.value && !englishOnly.value))
+const japaneseBox = computed(() => !mounted.value || (showJapanesePosts.value && !englishOnly.value))
 </script>
 
 <template>
   <div class="prose m-auto mb-8 select-none animate-none! op100!">
     <div flex="~ items-center gap4 wrap" mb2>
       <button flex="~ gap1" items-center op30 text-sm @click="englishOnly = !englishOnly">
-        <div :i="englishOnly ? 'carbon-checkbox-checked' : 'carbon-checkbox'" />
+        <div :i="englishBox ? 'carbon-checkbox-checked' : 'carbon-checkbox'" />
         English Only
       </button>
       <button
@@ -23,7 +30,7 @@ const route = useRoute()
         text-sm
         @click="toggleLanguagePosts('fr')"
       >
-        <div :i="showFrenchPosts && !englishOnly ? 'carbon-checkbox-checked' : 'carbon-checkbox'" />
+        <div :i="frenchBox ? 'carbon-checkbox-checked' : 'carbon-checkbox'" />
         Français
       </button>
       <button
@@ -34,7 +41,7 @@ const route = useRoute()
         text-sm
         @click="toggleLanguagePosts('ja')"
       >
-        <div :i="showJapanesePosts && !englishOnly ? 'carbon-checkbox-checked' : 'carbon-checkbox'" />
+        <div :i="japaneseBox ? 'carbon-checkbox-checked' : 'carbon-checkbox'" />
         日本語
       </button>
     </div>
