@@ -62,6 +62,9 @@ const { y: scroll } = useWindowScroll()
         <RouterLink to="/demos" title="Demos">
           <div i-ri-screenshot-line />
         </RouterLink>
+        <RouterLink to="/genart" title="Generative Art">
+          <div i-ri-shape-line />
+        </RouterLink>
         <!-- <RouterLink to="/chat" title="Let's Chat">
           <div i-ri-chat-1-line />
         </RouterLink> -->

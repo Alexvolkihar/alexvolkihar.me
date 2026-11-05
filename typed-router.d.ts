@@ -87,6 +87,118 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/genart/': RouteRecordInfo<
+      '/genart/',
+      '/genart',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/genart/asemic': RouteRecordInfo<
+      '/genart/asemic',
+      '/genart/asemic',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/genart/attractor': RouteRecordInfo<
+      '/genart/attractor',
+      '/genart/attractor',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/genart/collection': RouteRecordInfo<
+      '/genart/collection',
+      '/genart/collection',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/genart/contours': RouteRecordInfo<
+      '/genart/contours',
+      '/genart/contours',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/genart/coral': RouteRecordInfo<
+      '/genart/coral',
+      '/genart/coral',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/genart/courants': RouteRecordInfo<
+      '/genart/courants',
+      '/genart/courants',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/genart/fault-lines': RouteRecordInfo<
+      '/genart/fault-lines',
+      '/genart/fault-lines',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/genart/girih': RouteRecordInfo<
+      '/genart/girih',
+      '/genart/girih',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/genart/harmonograph': RouteRecordInfo<
+      '/genart/harmonograph',
+      '/genart/harmonograph',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/genart/marbling': RouteRecordInfo<
+      '/genart/marbling',
+      '/genart/marbling',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/genart/mosaic': RouteRecordInfo<
+      '/genart/mosaic',
+      '/genart/mosaic',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/genart/packing': RouteRecordInfo<
+      '/genart/packing',
+      '/genart/packing',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/genart/reaction': RouteRecordInfo<
+      '/genart/reaction',
+      '/genart/reaction',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/genart/strata': RouteRecordInfo<
+      '/genart/strata',
+      '/genart/strata',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/genart/weave': RouteRecordInfo<
+      '/genart/weave',
+      '/genart/weave',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/giving-talks': RouteRecordInfo<
       '/giving-talks',
       '/giving-talks',
@@ -276,6 +388,27 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/posts/dandan': RouteRecordInfo<
+      '/posts/dandan',
+      '/posts/dandan',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/posts/dandan-fr': RouteRecordInfo<
+      '/posts/dandan-fr',
+      '/posts/dandan-fr',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/posts/dandan-ja': RouteRecordInfo<
+      '/posts/dandan-ja',
+      '/posts/dandan-ja',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/posts/destructuring-with-object-or-array': RouteRecordInfo<
       '/posts/destructuring-with-object-or-array',
       '/posts/destructuring-with-object-or-array',
@@ -335,6 +468,27 @@ declare module 'vue-router/auto-routes' {
     '/posts/evolution-of-shiki-v1': RouteRecordInfo<
       '/posts/evolution-of-shiki-v1',
       '/posts/evolution-of-shiki-v1',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/posts/genart': RouteRecordInfo<
+      '/posts/genart',
+      '/posts/genart',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/posts/genart-fr': RouteRecordInfo<
+      '/posts/genart-fr',
+      '/posts/genart-fr',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/posts/genart-ja': RouteRecordInfo<
+      '/posts/genart-ja',
+      '/posts/genart-ja',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -953,6 +1107,102 @@ declare module 'vue-router/auto-routes' {
       views:
         | never
     }
+    'pages/genart/index.md': {
+      routes:
+        | '/genart/'
+      views:
+        | never
+    }
+    'pages/genart/asemic.md': {
+      routes:
+        | '/genart/asemic'
+      views:
+        | never
+    }
+    'pages/genart/attractor.md': {
+      routes:
+        | '/genart/attractor'
+      views:
+        | never
+    }
+    'pages/genart/collection.md': {
+      routes:
+        | '/genart/collection'
+      views:
+        | never
+    }
+    'pages/genart/contours.md': {
+      routes:
+        | '/genart/contours'
+      views:
+        | never
+    }
+    'pages/genart/coral.md': {
+      routes:
+        | '/genart/coral'
+      views:
+        | never
+    }
+    'pages/genart/courants.md': {
+      routes:
+        | '/genart/courants'
+      views:
+        | never
+    }
+    'pages/genart/fault-lines.md': {
+      routes:
+        | '/genart/fault-lines'
+      views:
+        | never
+    }
+    'pages/genart/girih.md': {
+      routes:
+        | '/genart/girih'
+      views:
+        | never
+    }
+    'pages/genart/harmonograph.md': {
+      routes:
+        | '/genart/harmonograph'
+      views:
+        | never
+    }
+    'pages/genart/marbling.md': {
+      routes:
+        | '/genart/marbling'
+      views:
+        | never
+    }
+    'pages/genart/mosaic.md': {
+      routes:
+        | '/genart/mosaic'
+      views:
+        | never
+    }
+    'pages/genart/packing.md': {
+      routes:
+        | '/genart/packing'
+      views:
+        | never
+    }
+    'pages/genart/reaction.md': {
+      routes:
+        | '/genart/reaction'
+      views:
+        | never
+    }
+    'pages/genart/strata.md': {
+      routes:
+        | '/genart/strata'
+      views:
+        | never
+    }
+    'pages/genart/weave.md': {
+      routes:
+        | '/genart/weave'
+      views:
+        | never
+    }
     'pages/giving-talks.md': {
       routes:
         | '/giving-talks'
@@ -1115,6 +1365,24 @@ declare module 'vue-router/auto-routes' {
       views:
         | never
     }
+    'pages/posts/dandan.md': {
+      routes:
+        | '/posts/dandan'
+      views:
+        | never
+    }
+    'pages/posts/dandan-fr.md': {
+      routes:
+        | '/posts/dandan-fr'
+      views:
+        | never
+    }
+    'pages/posts/dandan-ja.md': {
+      routes:
+        | '/posts/dandan-ja'
+      views:
+        | never
+    }
     'pages/posts/destructuring-with-object-or-array.md': {
       routes:
         | '/posts/destructuring-with-object-or-array'
@@ -1166,6 +1434,24 @@ declare module 'vue-router/auto-routes' {
     'pages/posts/evolution-of-shiki-v1.md': {
       routes:
         | '/posts/evolution-of-shiki-v1'
+      views:
+        | never
+    }
+    'pages/posts/genart.md': {
+      routes:
+        | '/posts/genart'
+      views:
+        | never
+    }
+    'pages/posts/genart-fr.md': {
+      routes:
+        | '/posts/genart-fr'
+      views:
+        | never
+    }
+    'pages/posts/genart-ja.md': {
+      routes:
+        | '/posts/genart-ja'
       views:
         | never
     }

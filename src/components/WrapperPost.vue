@@ -167,6 +167,8 @@ const ArtComponent = computed(() => {
   >
     <slot />
   </article>
+  <!-- Licence of the generative artworks, on every /genart page -->
+  <GenArtLicense v-if="/^\/genart(?:\/|$)/.test(route.path)" />
   <div v-if="route.path !== '/'" class="prose m-auto mt-8 mb-8 slide-enter animate-delay-500 print:hidden">
     <template v-if="frontmatter.duration">
       <span font-mono op50>> </span>
