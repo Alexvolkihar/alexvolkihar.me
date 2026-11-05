@@ -3,11 +3,25 @@ import { useHead } from '@unhead/vue'
 
 const route = useRoute()
 
-// Posts come in en/fr/ja (and legacy zh) versions: follow the page's language
+const frontmatter = computed(() => route.meta.frontmatter as { lang?: string, date?: unknown } | undefined)
+// The apex domain redirects to www, so canonical URLs use www
+const pageUrl = computed(() => `https://www.alexvolkihar.ovh${route.path === '/' ? '/' : route.path.replace(/\/$/, '')}`)
+
+// Title, description and og:image/twitter:* come from each Markdown page's
+// frontmatter (unplugin-vue-markdown `headEnabled`); the rest is per route here
 useHead({
+  // Posts come in en/fr/ja (and legacy zh) versions: follow the page's language
   htmlAttrs: {
-    lang: computed(() => (route.meta.frontmatter as { lang?: string } | undefined)?.lang || 'en'),
+    lang: computed(() => frontmatter.value?.lang || 'en'),
   },
+  link: [
+    { rel: 'canonical', href: pageUrl },
+  ],
+  meta: [
+    { property: 'og:url', content: pageUrl },
+    { property: 'og:type', content: computed(() => frontmatter.value?.date ? 'article' : 'website') },
+    { property: 'og:site_name', content: 'Alexvolkihar' },
+  ],
 })
 
 const imageModel = ref<HTMLImageElement>()

@@ -28,6 +28,9 @@ import { slugify } from './scripts/slugify'
 
 const promises: Promise<any>[] = []
 
+// Production origin (the apex domain redirects here)
+const SITE_URL = 'https://www.alexvolkihar.ovh'
+
 export default defineConfig({
   resolve: {
     alias: [
@@ -192,16 +195,26 @@ export default defineConfig({
         (() => {
           if (!id.endsWith('.md'))
             return
-          const route = basename(id, '.md')
-          if (route === 'index' || frontmatter.image || !frontmatter.title)
+          // Social crawlers need absolute URLs for og:image / twitter:image
+          if (typeof frontmatter.image === 'string' && frontmatter.image.startsWith('/'))
+            frontmatter.image = `${SITE_URL}${frontmatter.image}`
+          if (frontmatter.image || !frontmatter.title)
             return
+          let route = basename(id, '.md')
+          // `index` pages are named after their folder so they do not clash
+          // with each other (pages/index.md vs pages/genart/index.md) or with
+          // a same-named post (pages/posts/genart.md)
+          if (route === 'index') {
+            const folder = basename(dirname(id))
+            route = folder === 'pages' ? 'index' : `${folder}-index`
+          }
           const path = `og/${route}.png`
           promises.push(
             fs.existsSync(`${id.slice(0, -3)}.png`)
               ? fs.copy(`${id.slice(0, -3)}.png`, `public/${path}`)
               : generateOg(frontmatter.title!.replace(/\s-\s.*$/, '').trim(), `public/${path}`),
           )
-          frontmatter.image = `https://alexvolkihar.ovh/${path}`
+          frontmatter.image = `${SITE_URL}/${path}`
         })()
         const head = defaults(frontmatter, options)
         return { head, frontmatter }
@@ -275,12 +288,6 @@ export default defineConfig({
 
   ssgOptions: {
     formatting: 'minify',
-    // `useHead` in App.vue sets <html lang> in the browser only (the head is
-    // not rendered into the static pages), so write it here for fr/ja posts
-    onPageRendered(_route, html, { router }) {
-      const lang = (router.currentRoute.value.meta.frontmatter as { lang?: string } | undefined)?.lang
-      return lang ? html.replace(/<html lang="[^"]*"/, `<html lang="${lang}"`) : html
-    },
   },
 })
 
