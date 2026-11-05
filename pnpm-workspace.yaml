@@ -56,7 +56,9 @@ catalogs:
     typescript: ~6.0.3
   frontend:
     '@antfu/utils': ^9.3.0
-    '@unhead/vue': ^3.1.0
+    # Keep on the major vite-ssg uses (28.x bundles @unhead/vue 2): with v3
+    # the useHead() tags are missing from the statically generated pages
+    '@unhead/vue': ^2.1.13
     '@unocss/reset': ^66.7.0
     '@unpic/placeholder': ^0.1.2
     '@vercel/analytics': ^2.0.1
