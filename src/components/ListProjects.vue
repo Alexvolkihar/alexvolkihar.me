@@ -1,8 +1,35 @@
 <script setup lang="ts">
+import { RouterLink } from 'vue-router'
+
 defineProps<{ projects: Record<string, any[]> }>()
 
 function slug(name: string) {
   return name.toLowerCase().replace(/[\s\\/]+/g, '-')
+}
+
+function hasLink(item: { link?: string }) {
+  return !!item.link && item.link !== '#'
+}
+
+// A link to a page of this site goes through the router (same tab).
+function isInternal(item: { link?: string }) {
+  return hasLink(item) && item.link!.startsWith('/') && !item.link!.startsWith('//')
+}
+
+function cardTag(item: { link?: string }) {
+  if (isInternal(item))
+    return RouterLink
+  return hasLink(item) ? 'a' : 'div'
+}
+
+// Only the attributes that apply: an explicit `href: undefined` would
+// override the href RouterLink computes from `to`.
+function linkAttrs(item: { link?: string }) {
+  if (isInternal(item))
+    return { to: item.link }
+  if (hasLink(item))
+    return { href: item.link, target: '_blank' }
+  return {}
 }
 </script>
 
@@ -10,6 +37,10 @@ function slug(name: string) {
   <div class="max-w-300 mx-auto">
     <p text-center mt--6 mb5 op50 text-lg italic>
       Projects that I created or maintaining.
+    </p>
+    <p flex="~ gap-4 justify-center wrap" text-xs op50 mb-2>
+      <span inline-flex items-center gap-1><span i-ri-git-repository-line />Public: open source on GitHub</span>
+      <span inline-flex items-center gap-1><span i-ri-lock-line />Private: source not published</span>
     </p>
     <div class="prose pb5 mx-auto mt10 text-center">
       <div flex="~ gap-2 justify-center">
@@ -67,30 +98,52 @@ function slug(name: string) {
         class="project-grid py-2 max-w-500 w-max mx-auto"
         grid="~ cols-1 md:cols-2 gap-4 lg:cols-3"
       >
-        <a
-          v-for="item, idx in projects[key]"
-          :key="idx"
-          class="item relative flex items-center"
-          :href="item.link"
-          target="_blank"
-          :title="item.name"
-        >
-          <div v-if="item.icon" class="pt-2 pr-5">
-            <Slidev v-if="item.icon === 'slidev'" class="text-4xl opacity-50" />
-            <VueUse v-else-if="item.icon === 'vueuse'" class="text-4xl opacity-50" />
-            <VueReactivity v-else-if="item.icon === 'vue-reactivity'" class="text-4xl opacity-50" />
-            <VueDemi v-else-if="item.icon === 'vue-demi'" class="text-4xl opacity-50" />
-            <Unocss v-else-if="item.icon === 'unocss'" class="text-4xl opacity-50" />
-            <Vitest v-else-if="item.icon === 'vitest'" class="text-4xl opacity-50" />
-            <Elk v-else-if="item.icon === 'elk'" class="text-4xl opacity-50" />
-            <AnthonyFu v-else-if="item.icon === 'af'" class="text-4xl opacity-50" />
-            <div v-else class="text-3xl opacity-50" :class="item.icon || 'i-carbon-unknown'" />
-          </div>
-          <div class="flex-auto">
-            <div class="text-normal">{{ item.name }}</div>
-            <div class="desc text-sm opacity-50 font-normal" v-html="item.desc" />
-          </div>
-        </a>
+        <div v-for="item, idx in projects[key]" :key="idx" class="relative">
+          <component
+            :is="cardTag(item)"
+            class="item relative flex items-center h-full"
+            :class="[hasLink(item) ? 'is-link' : 'cursor-default', { 'pr-10!': item.repo }]"
+            v-bind="linkAttrs(item)"
+            :title="item.name"
+          >
+            <div v-if="item.icon" class="pt-2 pr-5">
+              <Slidev v-if="item.icon === 'slidev'" class="text-4xl opacity-50" />
+              <VueUse v-else-if="item.icon === 'vueuse'" class="text-4xl opacity-50" />
+              <VueReactivity v-else-if="item.icon === 'vue-reactivity'" class="text-4xl opacity-50" />
+              <VueDemi v-else-if="item.icon === 'vue-demi'" class="text-4xl opacity-50" />
+              <Unocss v-else-if="item.icon === 'unocss'" class="text-4xl opacity-50" />
+              <Vitest v-else-if="item.icon === 'vitest'" class="text-4xl opacity-50" />
+              <Elk v-else-if="item.icon === 'elk'" class="text-4xl opacity-50" />
+              <AnthonyFu v-else-if="item.icon === 'af'" class="text-4xl opacity-50" />
+              <div v-else class="text-3xl opacity-50" :class="item.icon || 'i-carbon-unknown'" />
+            </div>
+            <div class="flex-auto">
+              <div class="text-normal flex items-center gap-2">
+                {{ item.name }}
+                <span
+                  v-if="item.visibility"
+                  class="inline-flex items-center gap-0.5 text-xs op60 font-normal"
+                  :title="item.visibility === 'private' ? 'Private repository' : 'Public repository'"
+                >
+                  <span :class="item.visibility === 'private' ? 'i-ri-lock-line' : 'i-ri-git-repository-line'" />
+                  {{ item.visibility === 'private' ? 'Private' : 'Public' }}
+                </span>
+              </div>
+              <div class="desc text-sm opacity-50 font-normal" v-html="item.desc" />
+            </div>
+          </component>
+          <a
+            v-if="item.repo"
+            :href="item.repo"
+            target="_blank"
+            rel="noopener"
+            class="absolute top-2 right-2 p-1 rounded op40 hover:op100 hover:bg-gray/10 border-none! color-base"
+            :title="`${item.name} on GitHub`"
+            :aria-label="`${item.name} source code on GitHub`"
+          >
+            <div i-ri-github-line text-base />
+          </a>
+        </div>
       </div>
     </div>
     <div class="prose pb5 mx-auto mt10 text-center">
@@ -116,7 +169,7 @@ function slug(name: string) {
 </template>
 
 <style scoped>
-.project-grid a.item {
+.project-grid .item {
   background: transparent;
   font-size: 1.1rem;
   width: 350px;
@@ -125,7 +178,12 @@ function slug(name: string) {
   border-radius: 6px;
 }
 
-.project-grid a.item:hover {
+/* Same resting look as the global `a.item` rule, without the hover lift. */
+.project-grid div.item {
+  opacity: 0.6;
+}
+
+.project-grid .item.is-link:hover {
   background: #88888811;
 }
 </style>
