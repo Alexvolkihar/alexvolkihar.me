@@ -1,9 +1,9 @@
 // Procedural pixel sprites from mirrored random masks.
 //
 // The method is the one Dave Bollinger described for his Pixel Robots and
-// Pixel Spaceships (2007), as written up and generalised by Zelimir Fedoran's
+// Pixel Spaceships (2006), as written up and generalised by Zelimir Fedoran's
 // pixel-sprite-generator (MIT): a half mask whose cells are "always empty",
-// "maybe body", "body or dark detail" or "always body" is sampled at random,
+// "maybe body", "body or border" or "always border" is sampled at random,
 // mirrored around the vertical axis, and outlined. The masks here are not
 // fixed grids: each one is built from a few hash-drawn shapes (ellipses for
 // critters, boxes for robots, a tapered hull and wings for ships), so every
