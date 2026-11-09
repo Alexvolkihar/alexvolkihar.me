@@ -78,4 +78,11 @@ export const collection: CollectionEntry[] = [
     ratio: '1:1',
     date: '2026-11',
   },
+  {
+    name: 'Wavesdigo',
+    series: 'marbling',
+    hash: '0x4b6b134bc2d7d48418ba6b76cb80f32762abb41674577588067757264ccb23ed',
+    ratio: '1:1',
+    date: '2026-11',
+  },
 ]
