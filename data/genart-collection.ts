@@ -71,4 +71,11 @@ export const collection: CollectionEntry[] = [
     ratio: '2:3',
     date: '2026-11',
   },
+  {
+    name: 'ShadesOfFonts',
+    series: 'asemic',
+    hash: '0x23bd9b5ae629a43712924c76391b385f4ffbcb25d30fcd5cbb47033ffd6afce4',
+    ratio: '1:1',
+    date: '2026-11',
+  },
 ]
