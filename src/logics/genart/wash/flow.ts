@@ -46,6 +46,9 @@ interface Stone {
   tc: number
   island: boolean
   harm: number[]
+  /** Extra stretch downstream (a sandy tail) and a sideways bow, islands only. */
+  tail: number
+  bow: number
 }
 
 export interface River {
@@ -153,15 +156,37 @@ export function planRiver(r: Rng, course: CourseName, spec: WaterSpec, noise: No
   const addStone = (x: number, y: number, R: number, e: number, island: boolean) => {
     const harm: number[] = []
     for (let m = 2; m <= 5; m++)
-      harm.push(range(r, 0, island ? 0.1 : 0.09) / (m - 1), range(r, 0, Math.PI * 2))
-    rv.stones.push({ x, y, R, e, tc: 0, island, harm })
+      harm.push(range(r, 0, island ? 0.13 : 0.09) / (m - 1), range(r, 0, Math.PI * 2))
+    let tail = 1
+    let bow = 0
+    if (island) {
+      tail = range(r, 1.3, 1.9)
+      bow = range(r, -0.45, 0.45)
+    }
+    rv.stones.push({ x, y, R, e, tc: 0, island, harm, tail, bow })
   }
 
   if (course === 'Island') {
-    const a = range(r, -0.28, 0.28)
-    const c = centre(rv, a) + range(r, -0.3, 0.3) * halfWidth(rv, a)
+    // one island off the river's axis, with sandbars strung around it
+    const a = range(r, -0.3, 0.2)
+    const side = chance(r, 0.5) ? 1 : -1
+    const c = centre(rv, a) + side * range(r, 0.12, 0.38) * halfWidth(rv, a)
     const [x, y] = toWorld(rv, a, c)
-    addStone(x, y, rv.w0 * range(r, 0.26, 0.38), range(r, 1.7, 3.2), true)
+    addStone(x, y, rv.w0 * range(r, 0.22, 0.34), range(r, 1.8, 3), true)
+    const bars = int(r, 1, 3)
+    for (let i = 0; i < bars; i++) {
+      for (let tries = 0; tries < 8; tries++) {
+        const ab = a + range(r, -0.45, 0.75)
+        const cb = centre(rv, ab) + range(r, -0.7, 0.7) * halfWidth(rv, ab)
+        const [bx, by] = toWorld(rv, ab, cb)
+        const R = rv.w0 * range(r, 0.06, 0.11)
+        const e = range(r, 2, 3.4)
+        if (fits(bx, by, R, e * 1.5)) {
+          addStone(bx, by, R, e, true)
+          break
+        }
+      }
+    }
   }
   const stoneCount = (central: boolean) => {
     const n = int(r, spec.stones[0], spec.stones[1])
@@ -187,7 +212,7 @@ export function planRiver(r: Rng, course: CourseName, spec: WaterSpec, noise: No
     const nw = s.island ? Math.max(1, spec.wake) : spec.wake
     for (let k = 0; k < nw; k++) {
       const rho = s.R * range(r, 0.75, 1.1) * (s.island ? 0.7 : 1)
-      const along = s.R * s.e + rho * (2 + 1.7 * k) + range(r, 0, 0.3) * s.R
+      const along = s.R * s.e * s.tail + rho * (2 + 1.7 * k) + range(r, 0, 0.3) * s.R
       const across = sign * s.R * range(r, 0.35, 0.7)
       const x = s.x + along * rv.cos - across * rv.sin
       const y = s.y + along * rv.sin + across * rv.cos
@@ -205,7 +230,7 @@ export function planRiver(r: Rng, course: CourseName, spec: WaterSpec, noise: No
       const R = range(r, spec.eddyR[0], spec.eddyR[1])
       const s = (chance(r, 0.5) ? 1 : -1) * range(r, spec.eddyS[0], spec.eddyS[1])
       // free eddies keep clear of the stones and the island
-      const clear = rv.stones.every(st => Math.hypot(x - st.x, y - st.y) > st.R * st.e + R * 2)
+      const clear = rv.stones.every(st => Math.hypot(x - st.x, y - st.y) > st.R * st.e * st.tail + R * 2)
       if (clear)
         rv.twirls.push({ x, y, k: 1 / (R * R), s, lim: R * 3 })
     }
@@ -257,6 +282,19 @@ export function untwirl(rv: River, x: number, y: number) {
   scratch.y = y
 }
 
+/**
+ * Normalised local coordinates of a point around a stone: along the flow
+ * (stretched by the elongation, more so downstream for an island's tail),
+ * and across it (bowed sideways for an island). Result in local.a, local.c.
+ */
+const local = { a: 0, c: 0 }
+function stoneLocal(rv: River, s: Stone, dx: number, dy: number) {
+  const al = dx * rv.cos + dy * rv.sin
+  const da = al / (al > 0 ? s.e * s.tail : s.e)
+  local.a = da
+  local.c = -dx * rv.sin + dy * rv.cos - s.bow * da * da / s.R
+}
+
 /** Stream function t at a (twirled) world point, with the first `upTo` stones. */
 export function streamT(rv: River, noise: Noise2, x: number, y: number, upTo: number): number {
   const a = x * rv.cos + y * rv.sin
@@ -276,11 +314,12 @@ export function streamT(rv: River, noise: Noise2, x: number, y: number, upTo: nu
     const s = rv.stones[i]
     const dx = x - s.x
     const dy = y - s.y
-    const lim = s.R * s.e * 5
+    const lim = s.R * s.e * s.tail * 5
     if (dx > lim || dx < -lim || dy > lim || dy < -lim)
       continue
-    const da = (dx * rv.cos + dy * rv.sin) / s.e
-    const dc = -dx * rv.sin + dy * rv.cos
+    stoneLocal(rv, s, dx, dy)
+    const da = local.a
+    const dc = local.c
     const re2 = da * da + dc * dc
     const R2 = s.R * s.R
     if (re2 > R2 * 25)
@@ -308,16 +347,17 @@ export function solidSdf(rv: River, x: number, y: number) {
   for (const s of rv.stones) {
     const dx = x - s.x
     const dy = y - s.y
-    const lim = s.R * s.e * 2
+    const lim = s.R * (s.e * s.tail + Math.abs(s.bow) * 4) * 2
     if (dx > lim || dx < -lim || dy > lim || dy < -lim)
       continue
-    const da = (dx * rv.cos + dy * rv.sin) / s.e
-    const dc = -dx * rv.sin + dy * rv.cos
+    stoneLocal(rv, s, dx, dy)
+    const da = local.a
+    const dc = local.c
     const re = Math.sqrt(da * da + dc * dc)
     if (re > s.R * 2)
       continue
     const th = Math.atan2(dc, da)
-    let rad = 0.8
+    let rad = s.island ? 0.72 : 0.8
     for (let m = 0; m < 4; m++)
       rad += s.harm[m * 2] * Math.cos((m + 2) * th + s.harm[m * 2 + 1])
     const d = re - s.R * rad

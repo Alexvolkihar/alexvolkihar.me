@@ -22,7 +22,7 @@ import type { Series } from '../types'
 import type { CourseName, WaterSpec } from '../wash/flow'
 import type { InkLine, PenName, PenSpec } from '../wash/ink'
 import type { BandTable, PaintJob } from '../wash/paint'
-import { int, stream, weighted } from '../random'
+import { int, range, stream, weighted } from '../random'
 import { chaikin, contours } from '../wash/contour'
 import { focus, levelOf, planRiver, scratch, solidSdf, streamT, untwirl } from '../wash/flow'
 import { drawInk } from '../wash/ink'
@@ -176,6 +176,11 @@ function pigment(hex: string, dark: boolean): [number, number, number] {
   return [-Math.log(Math.max(c[0], 0.02)), -Math.log(Math.max(c[1], 0.02)), -Math.log(Math.max(c[2], 0.02))]
 }
 
+/** Darken a pigment: a colour on a dark ground, an absorbance on paper (val < 1 only). */
+function scale(p: number[], val: number): number[] {
+  return val === 1 ? p : p.map(c => c * val)
+}
+
 function emptyTable(k0: number, n: number): BandTable {
   return {
     k0,
@@ -195,6 +200,44 @@ function setBand(t: BandTable, i: number, a: number[], b: number[], dens: number
   t.dens[i] = dens
   t.gap[i] = gap
   t.gran[i] = gran
+}
+
+/** Cut a polyline where `hide` holds, keeping the visible runs (a closed line seen whole stays closed). */
+function splitWhere(pts: number[], closed: boolean, hide: (x: number, y: number) => boolean) {
+  const n = pts.length / 2
+  const vis = new Uint8Array(n)
+  let all = true
+  for (let i = 0; i < n; i++) {
+    vis[i] = hide(pts[i * 2], pts[i * 2 + 1]) ? 0 : 1
+    if (!vis[i])
+      all = false
+  }
+  if (all)
+    return [{ pts, closed }]
+  const runs: { pts: number[], closed: boolean }[] = []
+  // start a closed line at a hidden vertex so no run wraps around
+  let s0 = 0
+  if (closed) {
+    while (vis[s0])
+      s0++
+  }
+  let cur: number[] = []
+  for (let k = 0; k <= n; k++) {
+    if (k === n && !closed)
+      break
+    const i = (s0 + k) % n
+    if (vis[i] && k < n) {
+      cur.push(pts[i * 2], pts[i * 2 + 1])
+    }
+    else {
+      if (cur.length >= 4)
+        runs.push({ pts: cur, closed: false })
+      cur = []
+    }
+  }
+  if (cur.length >= 4)
+    runs.push({ pts: cur, closed: false })
+  return runs
 }
 
 const LAND_BANDS = 60
@@ -220,7 +263,11 @@ function buildTables(r: Rng, half: number, pal: Palette, ws: WashSpec) {
     const p2 = second < 0.5 ? (p1 + 1) % 4 : p1
     bands.on[i] = on < ws.paint ? 1 : 0
     bands.bloom[i] = bloom < ws.bloom ? 1 : 0
-    setBand(bands, i, water[p1], water[p2], 0.5 + dens * 0.5, ws.gap * (0.4 + gap * 1.4), pal.gran[p1])
+    // on a dark ground, bands range from deep to light so the river has depth
+    // (derived from draws already made, so the bright palettes are unchanged)
+    const vq = (dens * 7.31 + gap * 3.17) % 1
+    const val = pal.dark ? (vq < 0.3 ? 0.6 : vq < 0.55 ? 0.82 : 1) : 1
+    setBand(bands, i, scale(water[p1], val), scale(water[p2], val), 0.5 + dens * 0.5, ws.gap * (0.4 + gap * 1.4), pal.gran[p1])
   }
   for (let j = 0; j < LAND_BANDS; j++) {
     for (const k of [half + j, -half - 1 - j]) {
@@ -243,11 +290,13 @@ function buildTables(r: Rng, half: number, pal: Palette, ws: WashSpec) {
     setBand(glaze, i, water[p], water[(p + 2) % 4], (0.12 + 0.22 * dens) * (0.4 + 0.9 * ws.glaze) * (pal.dark ? 0.5 : 1), ws.gap * 1.5, pal.gran[p])
   }
   // island: a sandy rim and a darker interior
-  const rings = emptyTable(0, 2)
+  // island: a sandy rim, a mottled interior and dabs of vegetation
+  const rings = emptyTable(0, 3)
   const rd = r()
   rings.on.fill(1)
   setBand(rings, 0, land[0], land[0], 0.3 + 0.1 * rd, ws.gap, pal.gran[5])
-  setBand(rings, 1, land[1], water[3], 0.38 + 0.15 * rd, ws.gap, pal.gran[6])
+  setBand(rings, 1, land[1], water[3], 0.32 + 0.12 * rd, ws.gap, pal.gran[6])
+  setBand(rings, 2, scale(land[1], pal.dark ? 0.7 : 1), scale(land[0], pal.dark ? 0.7 : 1), pal.dark ? 0.9 : 0.55, 0, pal.gran[6])
   return { bands, glaze, glazeInv: 1 / int(r, 3, 5), glazeOff: r(), rings }
 }
 
@@ -356,18 +405,33 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
   // --- Stage 2: ink -----------------------------------------------------------
   const lines: InkLine[] = []
   const half = rv.half
+  // line spacing (world units) at a point, from the gradient of the level
+  const spacing = (x: number, y: number) => {
+    const i = Math.round((x - gx0) / STEP)
+    const j = Math.round((y - gy0) / STEP)
+    if (i < 0 || j < 0 || i >= gw || j >= gh)
+      return 1
+    return 1 / Math.max(grid[(j * gw + i) * 8 + 1], 1e-3)
+  }
   for (const c of contours({ w: gw, h: gh, x0: gx0, y0: gy0, step: STEP, v: Lf }, -4000, 4000)) {
     const lv = c.level
     const bank = Math.abs(lv) === half
     const onLand = Math.abs(lv) > half
     if (f.Pen === 'Sparse' && !bank && lv % 2 !== 0)
       continue
-    lines.push({
-      pts: chaikin(c.pts, c.closed, 1),
-      closed: c.closed,
-      wm: bank ? 1.8 : onLand ? 0.6 : 1,
-      alpha: onLand ? 0.7 : 1,
-    })
+    // where eddies squeeze the lines together, drop every other line, then
+    // three in four, so the washes stay visible between them
+    const minSp = bank ? 0 : lv % 4 !== 0 ? (lv % 2 !== 0 ? 0.008 : 0.005) : 0
+    const pts = chaikin(c.pts, c.closed, 1)
+    const runs = minSp > 0 ? splitWhere(pts, c.closed, (x, y) => spacing(x, y) < minSp) : [{ pts, closed: c.closed }]
+    for (const run of runs) {
+      lines.push({
+        pts: run.pts,
+        closed: run.closed,
+        wm: bank ? 1.8 : onLand ? 0.6 : 1,
+        alpha: onLand ? 0.7 : 1,
+      })
+    }
   }
   if (nStones > 0) {
     const rf = new Float32Array(gw * gh)
@@ -381,9 +445,8 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
     const rf = new Float32Array(gw * gh)
     for (let o = 0; o < rf.length; o++)
       rf[o] = -islF[o] / ringStep
-    for (const c of contours({ w: gw, h: gh, x0: gx0, y0: gy0, step: STEP, v: rf }, 0, 1)) {
-      lines.push({ pts: chaikin(c.pts, c.closed, 1), closed: c.closed, wm: c.level === 0 ? 1.4 : 0.7, alpha: c.level === 0 ? 1 : 0.7 })
-    }
+    for (const c of contours({ w: gw, h: gh, x0: gx0, y0: gy0, step: STEP, v: rf }, 0, 0))
+      lines.push({ pts: chaikin(c.pts, c.closed, 1), closed: c.closed, wm: 1.2, alpha: 1 })
   }
 
   const margin = Math.round(0.028 * S)
@@ -398,18 +461,19 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
   g.fillStyle = pal.ink
   // lines thin out where the flow squeezes them together
   const crowd = (x: number, y: number) => {
-    const i = Math.round((x - gx0) / STEP)
-    const j = Math.round((y - gy0) / STEP)
-    if (i < 0 || j < 0 || i >= gw || j >= gh)
-      return 1
-    const sp = 1 / Math.max(grid[(j * gw + i) * 8 + 1], 1e-3)
-    return sp > 0.013 ? 1 : Math.max(0.28, (sp / 0.013) ** 0.8)
+    const sp = spacing(x, y)
+    return sp > 0.013 ? 1 : Math.max(0.3, (sp / 0.013) ** 0.8)
   }
   drawInk(g, lines, W, H, S, pen, stream(hash, 'ink'), penN, crowd)
   g.restore()
 
   // --- Stage 3: colour ------------------------------------------------------
   const paper = coldPressed()
+  // the shared paper tile is turned and shifted per piece, so its repeat is
+  // never aligned with the canvas nor the same from one piece to the next
+  const pr = stream(hash, 'paper')
+  const pa = range(pr, 0.25, Math.PI / 2 - 0.25) + (pr() < 0.5 ? 0 : Math.PI / 2)
+  const paperXf = [Math.cos(pa), Math.sin(pa), pr(), pr()]
   const job: PaintJob = {
     W,
     H,
@@ -423,11 +487,12 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
     gy0,
     step: STEP,
     ...paper,
+    paperXf,
     ...tables,
     ringStep,
     stone: pigment(pal.stone, pal.dark),
     stoneDens: pal.dark ? 0.9 : 0.55,
-    edgeE: ws.edgeE,
+    edgeE: pal.dark ? Math.max(ws.edgeE, 0.75) : ws.edgeE,
     edgeW: ws.edgeW,
     soft: ws.soft,
     bleed: ws.bleed,

@@ -49,6 +49,8 @@ export interface PaintJob {
   paperS: Float32Array
   /** Paper tile size in texels (a power of two); the tile spans the short side. */
   pn: number
+  /** Placement of the tile: cos, sin, offset x, offset y (tile units). */
+  paperXf: number[]
   bands: BandTable
   glaze: BandTable
   glazeInv: number
@@ -88,23 +90,31 @@ function expNeg(x: number): number {
 }
 
 /**
- * Lay one wash of pigment p mixed with pigment q (offsets in `pig`) by m.
- * acc holds the absorbance (0..2) and, on a dark ground, the colour (3..5).
+ * Lay one wash of pigment p mixed with pigment q (offsets in `pig`) by m,
+ * with `edge` the extra pigment pooled at the rim. acc holds the absorbance
+ * (0..2) and, on a dark ground, the colour (3..5). On paper the pooled
+ * pigment simply adds up; as gouache on a dark ground it is a denser, deeper
+ * tone of the same colour, so rims darken there too instead of glowing.
  */
-function lay(acc: Float64Array, dark: boolean, pig: Float32Array, p: number, q: number, m: number, conc: number) {
-  const cr = pig[p] + (pig[q] - pig[p]) * m
-  const cg = pig[p + 1] + (pig[q + 1] - pig[p + 1]) * m
-  const cb = pig[p + 2] + (pig[q + 2] - pig[p + 2]) * m
+function lay(acc: Float64Array, dark: boolean, pig: Float32Array, p: number, q: number, m: number, conc: number, edge: number) {
+  let cr = pig[p] + (pig[q] - pig[p]) * m
+  let cg = pig[p + 1] + (pig[q + 1] - pig[p + 1]) * m
+  let cb = pig[p + 2] + (pig[q + 2] - pig[p + 2]) * m
   if (dark) {
-    const al = 1 - expNeg(conc * DARK_K)
+    const deep = 1 / (1 + 1.6 * edge)
+    cr *= deep
+    cg *= deep
+    cb *= deep
+    const al = 1 - expNeg(conc * (1 + 0.4 * edge) * DARK_K)
     acc[3] += (cr - acc[3]) * al
     acc[4] += (cg - acc[4]) * al
     acc[5] += (cb - acc[5]) * al
   }
   else {
-    acc[0] += cr * conc
-    acc[1] += cg * conc
-    acc[2] += cb * conc
+    const c = conc * (1 + edge)
+    acc[0] += cr * c
+    acc[1] += cg * c
+    acc[2] += cb * c
   }
 }
 
@@ -125,6 +135,10 @@ export function paintRows(job: PaintJob, data: Uint8ClampedArray, y0: number, ro
   const line = new Float32Array(gw * STRIDE)
   const pscale = pn / S
   const pmask = pn - 1
+  const xc = job.paperXf[0] * pscale
+  const xs = job.paperXf[1] * pscale
+  const xox = job.paperXf[2] * pn
+  const xoy = job.paperXf[3] * pn
 
   const stonePig = new Float32Array([job.stone[0], job.stone[1], job.stone[2]])
 
@@ -139,27 +153,29 @@ export function paintRows(job: PaintJob, data: Uint8ClampedArray, y0: number, ro
     const r1 = r0 + gw * STRIDE
     for (let k = 0; k < line.length; k++)
       line[k] = G[r0 + k] + (G[r1 + k] - G[r0 + k]) * fy
-    const pyf = (py + 0.5) * pscale
-    const pjf = Math.floor(pyf)
-    const pfy = pyf - pjf
-    const pr0 = (pjf & pmask) * pn
-    const pr1 = ((pjf + 1) & pmask) * pn
     const dyEdge = Math.min(py, H - 1 - py)
+    const tx0 = 0.5 * xc - (py + 0.5) * xs + xox
+    const ty0 = 0.5 * xs + (py + 0.5) * xc + xoy
     for (let px = 0; px < W; px++) {
       const o4 = (row * W + px) * 4
       const u = (px + 0.5 - W / 2) * invS
-      // paper relief
-      const pxf = (px + 0.5) * pscale
-      const pif = Math.floor(pxf)
-      const pfx = pxf - pif
-      const pc0 = pif & pmask
-      const pc1 = (pif + 1) & pmask
-      const q00 = (1 - pfx) * (1 - pfy)
-      const q01 = pfx * (1 - pfy)
-      const q10 = (1 - pfx) * pfy
-      const q11 = pfx * pfy
-      const ph = paperH[pr0 + pc0] * q00 + paperH[pr0 + pc1] * q01 + paperH[pr1 + pc0] * q10 + paperH[pr1 + pc1] * q11
-      const shade = paperS[pr0 + pc0] * q00 + paperS[pr0 + pc1] * q01 + paperS[pr1 + pc0] * q10 + paperS[pr1 + pc1] * q11
+      // paper relief: the tile turned and shifted for this piece
+      const tx = tx0 + px * xc
+      const ty = ty0 + px * xs
+      const txi = Math.floor(tx)
+      const tyi = Math.floor(ty)
+      const tfx = tx - txi
+      const tfy = ty - tyi
+      const c0 = txi & pmask
+      const c1 = (txi + 1) & pmask
+      const t0 = (tyi & pmask) * pn
+      const t1 = ((tyi + 1) & pmask) * pn
+      const ha = paperH[t0 + c0] + (paperH[t0 + c1] - paperH[t0 + c0]) * tfx
+      const hb = paperH[t1 + c0] + (paperH[t1 + c1] - paperH[t1 + c0]) * tfx
+      const ph = ha + (hb - ha) * tfy
+      const sa = paperS[t0 + c0] + (paperS[t0 + c1] - paperS[t0 + c0]) * tfx
+      const sb = paperS[t1 + c0] + (paperS[t1 + c1] - paperS[t1 + c0]) * tfx
+      const shade = sa + (sb - sa) * tfy
       acc[0] = 0
       acc[1] = 0
       acc[2] = 0
@@ -209,8 +225,8 @@ export function paintRows(job: PaintJob, data: Uint8ClampedArray, y0: number, ro
             let cov = de * invSoft
             if (cov > 1)
               cov = 1
-            const conc = glaze.dens[gk] * vary * (1 + job.edgeE * 0.8 * expNeg(de * invEdge)) * (1 + glaze.gran[gk] * job.gran * valley * 2)
-            lay(acc, dark, glaze.pig, gk * 6, gk * 6 + 3, mix, conc * cov)
+            const conc = glaze.dens[gk] * vary * (1 + glaze.gran[gk] * job.gran * valley * 2)
+            lay(acc, dark, glaze.pig, gk * 6, gk * 6 + 3, mix, conc * cov, job.edgeE * 0.8 * expNeg(de * invEdge))
           }
         }
 
@@ -220,8 +236,8 @@ export function paintRows(job: PaintJob, data: Uint8ClampedArray, y0: number, ro
             let cov = -rock * S
             if (cov > 1)
               cov = 1
-            const conc = job.stoneDens * vary * (1 + 1.2 * expNeg(-rock * invEdge * 0.7)) * (1 + 1.6 * valley)
-            lay(acc, dark, stonePig, 0, 0, 0, conc * cov)
+            const conc = job.stoneDens * vary * (1 + 1.6 * valley)
+            lay(acc, dark, stonePig, 0, 0, 0, conc * cov, 1.2 * expNeg(-rock * invEdge * 0.7))
           }
           else {
             // an island: a sandy rim, then a mottled, granular interior
@@ -233,10 +249,14 @@ export function paintRows(job: PaintJob, data: Uint8ClampedArray, y0: number, ro
               let cov = de * invSoft
               if (cov > 1)
                 cov = 1
-              let conc = rings.dens[idx] * vary * (1 + job.edgeE * expNeg(de * invEdge)) * (1 + rings.gran[idx] * valley * 2.5)
+              let conc = rings.dens[idx] * vary * (1 + rings.gran[idx] * valley * 2.5)
               if (inner)
                 conc *= 0.45 + 1.1 * wob
-              lay(acc, dark, rings.pig, idx * 6, idx * 6 + 3, mix, conc * cov)
+              lay(acc, dark, rings.pig, idx * 6, idx * 6 + 3, mix, conc * cov, job.edgeE * expNeg(de * invEdge))
+              // dabs of vegetation where the fine noise peaks
+              const dab = (wob - 0.55) * 5 + (ph - 0.5) * 7
+              if (inner && dab > 0)
+                lay(acc, dark, rings.pig, 12, 15, nLow, rings.dens[2] * (dab > 1 ? 1 : dab) * cov, 0.3)
             }
           }
         }
@@ -253,7 +273,12 @@ export function paintRows(job: PaintJob, data: Uint8ClampedArray, y0: number, ro
           // stones keep a thin rim of white water around them
           const rockGap = Math.min(rock, isl) - 0.004
           if (bands.on[bi]) {
-            const gp = bands.gap[bi] * (0.35 + wob * 1.3) + job.dryGap * (ph > 0.5 ? ph - 0.5 : 0)
+            // thin bands (squeezed in eddies) keep their colour: the white
+            // gap and the pooled rim shrink with the band
+            let gp = bands.gap[bi] * (0.35 + wob * 1.3) + job.dryGap * (ph > 0.5 ? ph - 0.5 : 0)
+            if (gp > invG * 0.16)
+              gp = invG * 0.16
+            const ie = invG * 0.3 < job.edgeW ? 1 / (invG * 0.3) : invEdge
             let de = Math.min(dLo, dHi) - gp
             if (borderD < de)
               de = borderD
@@ -263,24 +288,26 @@ export function paintRows(job: PaintJob, data: Uint8ClampedArray, y0: number, ro
               let cov = de * invSoft
               if (cov > 1)
                 cov = 1
-              let conc = bands.dens[bi] * vary * (1 + job.edgeE * expNeg(de * invEdge)) * (1 + bands.gran[bi] * job.gran * valley * 2)
+              let conc = bands.dens[bi] * vary * (1 + bands.gran[bi] * job.gran * valley * 2)
+              let edge = job.edgeE * expNeg(de * ie)
               if (bands.bloom[bi]) {
                 const b = nBloom - job.bloomThr
                 const ab = b < 0 ? -b : b
-                conc *= 1 + 1.7 * expNeg(ab * 70)
+                edge += 1.7 * expNeg(ab * 70)
                 if (b > 0)
                   conc *= 0.32 + 0.68 * expNeg(b * 25)
               }
-              lay(acc, dark, bands.pig, bi * 6, bi * 6 + 3, mix, conc * cov)
+              lay(acc, dark, bands.pig, bi * 6, bi * 6 + 3, mix, conc * cov, edge)
             }
           }
-          if (invBleed > 0 && rockGap > 0) {
-            // wet in wet: the neighbours' pigment creeps over the boundary
+          // wet in wet: the neighbours' pigment creeps over the boundary; on a
+          // dark ground only into a painted band, or it would glow on the black
+          if (invBleed > 0 && rockGap > 0 && (!dark || bands.on[bi])) {
             const nb = f < 0.5 ? bi - 1 : bi + 1
             const d = f < 0.5 ? dLo : dHi
             if (nb >= 0 && nb < bands.n && bands.on[nb]) {
-              const conc = bands.dens[nb] * vary * job.bleed * expNeg(d * invBleed) * (1 + bands.gran[nb] * job.gran * valley)
-              lay(acc, dark, bands.pig, nb * 6, nb * 6 + 3, 1 - mix, conc)
+              const conc = bands.dens[nb] * vary * job.bleed * (dark ? 0.6 : 1) * expNeg(d * invBleed) * (1 + bands.gran[nb] * job.gran * valley)
+              lay(acc, dark, bands.pig, nb * 6, nb * 6 + 3, 1 - mix, conc, 0)
             }
           }
         }
