@@ -16,7 +16,10 @@
 // around the same central square, which is solved first so that it stays the
 // same. Mirror and kaleidoscope pieces solve a half or a quarter of the grid
 // and reflect it: the reflected tiles still fit, because a reflection keeps
-// the shared corners and features of every edge.
+// the shared corners and features of every edge. A mirrored relief would only
+// give an ink blot, so a symmetric landscape follows a designed plan instead
+// (../collapse/plan.ts): a parterre crossed by canals, a citadel in its moat,
+// or a grand canal running down to the sea.
 
 import type { Grid, Palette, Placed } from '../collapse/geom'
 import type { BaseTile, Tile, TileSet } from '../collapse/wfc'
@@ -26,6 +29,7 @@ import { phash, valueNoise } from '../collapse/geom'
 import { drawKnotwork, knotBases } from '../collapse/knotwork'
 import { drawLandscape, landscapeBases, landscapeGuide } from '../collapse/landscape'
 import { drawPipes, pipeBases } from '../collapse/pipes'
+import { landscapePlan, legalize } from '../collapse/plan'
 import { buildSet, expand, FLIP_X, FLIP_Y, solve, transform } from '../collapse/wfc'
 import { stream, weighted } from '../random'
 
@@ -168,12 +172,20 @@ function build(hash: string, W: number, H: number) {
   let mult: Float64Array | undefined
   let cls: Uint16Array | undefined
   if (f.World === 'Landscape') {
+    // A symmetric landscape follows a designed plan (../collapse/plan.ts);
+    // a free one follows a seeded relief.
+    const plan = f.Symmetry === 'Free' ? undefined : landscapePlan(f.Symmetry, N / 2, stream(hash, 'plan'))
     const guide = landscapeGuide(f.Density, guideSeed, valueNoise(guideSeed))
     const lattice = new Float64Array((rc + 1) * (rr + 1))
     for (let j = 0; j <= rr; j++) {
-      for (let i = 0; i <= rc; i++)
-        lattice[j * (rc + 1) + i] = Math.max(-0.5, Math.min(4.3, guide((i - cols / 2) * s / S, (j - rows / 2) * s / S)))
+      for (let i = 0; i <= rc; i++) {
+        const v = plan ? plan.level(i - cols / 2, j - rows / 2) : guide((i - cols / 2) * s / S, (j - rows / 2) * s / S)
+        lattice[j * (rc + 1) + i] = Math.max(-0.5, Math.min(4.3, v))
+      }
     }
+    if (plan)
+      legalize(lattice, rc + 1, rr + 1)
+    const sigma = plan ? plan.sigma : 0.8
     mult = new Float64Array(cells * n)
     cls = new Uint16Array(n).map((_, t) => t)
     const at = [[0, 0], [1, 0], [1, 1], [0, 1]]
@@ -186,7 +198,8 @@ function build(hash: string, W: number, H: number) {
           let dev = 0
           for (let k = 0; k < 4; k++)
             dev += (t.corners[k] - d[k]) ** 2
-          mult[c * n + t.id] = Math.exp(-dev / (2 * 0.8 * 0.8)) + 1e-6
+          const fw = plan && t.groups.length ? plan.feature(i - cols / 2 + 0.5, j - rows / 2 + 0.5, t) : 1
+          mult[c * n + t.id] = fw * Math.exp(-dev / (2 * sigma * sigma)) + 1e-6
         }
       }
     }
@@ -210,7 +223,7 @@ function build(hash: string, W: number, H: number) {
     }
   }
 
-  const G: Grid = { cols, rows, s, x0, y0, cells: placed, S, W, H }
+  const G: Grid = { cols, rows, s, x0, y0, cells: placed, S, W, H, mirror: [rc < cols, rr < rows] }
   return { f, world, G, decorSeed }
 }
 
@@ -287,7 +300,11 @@ export default {
   // found. Candidates are skipped when they are Coarse + Sparse, when their
   // solved grid is more than half one class of tile, or when edge features
   // cover fewer than 3 % of the cells (gridStats). The cover, the first
-  // landscape in Atlas, is then moved first.
+  // landscape in Atlas, is then moved first. The picks were made before the
+  // symmetric landscapes got their plans and the sparse dungeons and pipes
+  // were filled out; the hashes were kept and checked again by eye. Two of
+  // them no longer pass the measures as they stand: 0x75dd..., now a canal
+  // plan with no river or road, and 0x9825..., whose plate is 55 % empty.
   gallery: [
     '0x95e049f3bc09dcceb722ff7aec0591bd33eb8cf2657e769b963be52021a07ba8',
     '0x4f283411091ebb84ff76c0eac8575203fddc66c3da84d3b326110adb6c9bbdd8',

@@ -97,6 +97,14 @@ export function drawLandscape(g: CanvasRenderingContext2D, G: Grid, pal: Palette
   // Small details per cell scale with the cell area, so a coarse grid is not
   // emptier than a fine one.
   const k = (s / (S / 16)) ** 2
+  // In a mirrored piece the decorations are mirrored with the tiles: every
+  // cell draws its details from the cell it reflects, flipped.
+  const [mx, my] = G.mirror ?? [false, false]
+  const fx = (p: Placed) => mx && p.i >= G.cols / 2
+  const fy = (p: Placed) => my && p.j >= G.rows / 2
+  const ph = (p: Placed, n: number) => phash(seed, fx(p) ? G.cols - 1 - p.i : p.i, fy(p) ? G.rows - 1 - p.j : p.j, n)
+  const sx = (p: Placed) => fx(p) ? -1 : 1
+  const sy = (p: Placed) => fy(p) ? -1 : 1
   g.fillStyle = pal.deep
   g.fillRect(0, 0, W, H)
   g.lineCap = 'round'
@@ -144,10 +152,10 @@ export function drawLandscape(g: CanvasRenderingContext2D, G: Grid, pal: Palette
   // Wave marks on the open sea.
   g.beginPath()
   for (const p of cells) {
-    if (!p.corners.every(c => c === DEEP) || phash(seed, p.i, p.j, 60) > Math.min(0.7, 0.22 * k))
+    if (!p.corners.every(c => c === DEEP) || ph(p, 60) > Math.min(0.7, 0.22 * k))
       continue
-    const x = p.x + (phash(seed, p.i, p.j, 61) - 0.5) * 0.4 * s
-    const y = p.y + (phash(seed, p.i, p.j, 62) - 0.5) * 0.4 * s
+    const x = p.x + sx(p) * (ph(p, 61) - 0.5) * 0.4 * s
+    const y = p.y + sy(p) * (ph(p, 62) - 0.5) * 0.4 * s
     const r = 0.09 * s
     for (const dx of [-r, r]) {
       g.moveTo(x + dx - r, y)
@@ -188,8 +196,8 @@ export function drawLandscape(g: CanvasRenderingContext2D, G: Grid, pal: Palette
     const sand = caseOf(p, SAND)
     const grass = caseOf(p, GRASS)
     for (let q = 0; q < Math.round(7 * k); q++) {
-      const u = phash(seed, p.i, p.j, q * 2) - 0.5
-      const v = phash(seed, p.i, p.j, q * 2 + 1) - 0.5
+      const u = sx(p) * (ph(p, q * 2) - 0.5)
+      const v = sy(p) * (ph(p, q * 2 + 1) - 0.5)
       const ls = new Local(g, p.x, p.y, s, sand.k).local(p.x + u * s, p.y + v * s)
       const lg = new Local(g, p.x, p.y, s, grass.k).local(p.x + u * s, p.y + v * s)
       if (inside(sand.kind, joined(p), ls[0], ls[1]) && !inside(grass.kind, joined(p), lg[0], lg[1])) {
@@ -207,8 +215,8 @@ export function drawLandscape(g: CanvasRenderingContext2D, G: Grid, pal: Palette
     if (!plain(p, GRASS))
       continue
     for (let q = 0; q < Math.max(1, Math.round(2 * k)); q++) {
-      const u = (phash(seed, p.i, p.j, 400 + q) - 0.5) * 0.8
-      const v = (phash(seed, p.i, p.j, 450 + q) - 0.5) * 0.8
+      const u = sx(p) * (ph(p, 400 + q) - 0.5) * 0.8
+      const v = sy(p) * (ph(p, 450 + q) - 0.5) * 0.8
       const x = p.x + u * s
       const y = p.y + v * s
       g.moveTo(x - 0.05 * s, y - 0.05 * s)
@@ -228,8 +236,8 @@ export function drawLandscape(g: CanvasRenderingContext2D, G: Grid, pal: Palette
     const forest = p.corners.includes(FOREST)
     if (!forest) {
       for (let q = 0; q < Math.max(1, Math.round(k)); q++) {
-        if (plain(p, GRASS) && phash(seed, p.i, p.j, 90 + 3 * q) < 0.1)
-          trees.push([p.x + (phash(seed, p.i, p.j, 91 + 3 * q) - 0.5) * 0.6 * s, p.y + (phash(seed, p.i, p.j, 92 + 3 * q) - 0.5) * 0.6 * s, Math.min(0.15 * s, 0.012 * S)])
+        if (plain(p, GRASS) && ph(p, 90 + 3 * q) < 0.1)
+          trees.push([p.x + sx(p) * (ph(p, 91 + 3 * q) - 0.5) * 0.6 * s, p.y + sy(p) * (ph(p, 92 + 3 * q) - 0.5) * 0.6 * s, Math.min(0.15 * s, 0.012 * S)])
       }
       continue
     }
@@ -250,11 +258,11 @@ export function drawLandscape(g: CanvasRenderingContext2D, G: Grid, pal: Palette
     const tr = Math.min(0.2, 0.62 / nt)
     pts.forEach(([u, v], q) => {
       const jit = p.groups.length ? 0.06 : 0.5 / nt
-      const ju = u + (phash(seed, p.i, p.j, 100 + q) - 0.5) * jit
-      const jv = v + (phash(seed, p.i, p.j, 160 + q) - 0.5) * jit
+      const ju = sx(p) * (u + (ph(p, 100 + q) - 0.5) * jit)
+      const jv = sy(p) * (v + (ph(p, 160 + q) - 0.5) * jit)
       const [lu, lv] = l.local(p.x + ju * s, p.y + jv * s)
       if (inside(c.kind, joined(p), lu, lv))
-        trees.push([p.x + ju * s, p.y + jv * s, tr * (0.75 + 0.45 * phash(seed, p.i, p.j, 220 + q)) * s])
+        trees.push([p.x + ju * s, p.y + jv * s, tr * (0.75 + 0.45 * ph(p, 220 + q)) * s])
     })
   }
   trees.sort((a, b) => a[1] - b[1] || a[0] - b[0])
@@ -364,12 +372,12 @@ export function drawLandscape(g: CanvasRenderingContext2D, G: Grid, pal: Palette
       continue
     const n = p.groups[0].edges.length
     if (p.tile.name === 'farm')
-      houses.push([p.x, p.y, phash(seed, p.i, p.j, 200) < 0.5])
+      houses.push([p.x, p.y, ph(p, 200) < 0.5])
     const pr = p.tile.name === 'village' ? 0.75 : n === 1 ? 0.2 : 0.16
     const qs = [[-0.27, -0.27], [0.27, -0.27], [0.27, 0.27], [-0.27, 0.27]]
     qs.forEach(([u, v], q) => {
-      if (phash(seed, p.i, p.j, 210 + q) < pr)
-        houses.push([p.x + u * s, p.y + v * s, phash(seed, p.i, p.j, 220 + q) < 0.5])
+      if (ph(p, 210 + q) < pr)
+        houses.push([p.x + sx(p) * u * s, p.y + sy(p) * v * s, ph(p, 220 + q) < 0.5])
     })
   }
   const roofA = pal.a1

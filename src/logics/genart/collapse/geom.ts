@@ -45,6 +45,8 @@ export interface Grid {
   S: number
   W: number
   H: number
+  /** Mirror axes (vertical, horizontal) of a symmetric piece, if any. */
+  mirror?: readonly [boolean, boolean]
 }
 
 type RGB = [number, number, number]

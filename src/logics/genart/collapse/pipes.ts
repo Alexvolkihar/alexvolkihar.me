@@ -14,7 +14,7 @@ function t(name: string, feats: Quad, weight: number, groups: { edges: number[],
 }
 
 export function pipeBases(density: string): BaseTile[] {
-  const empty = density === 'Sparse' ? 3.2 : density === 'Dense' ? 0.8 : 1.7
+  const empty = density === 'Sparse' ? 2.3 : density === 'Dense' ? 0.8 : 1.7
   return [
     t('empty', [0, 0, 0, 0], empty, []),
     t('pipe', [1, 0, 1, 0], 0.8, [{ edges: [0, 2], kind: 'pipe' }]),
