@@ -9,6 +9,12 @@
 // placement with shrinking radii; small filler rosettes and sparkles are then
 // dropped into whatever room is left, rejecting any candidate that would touch
 // a body, an orbit band or the comet.
+//
+// A solar system has its own hidden variations, drawn from the "solar" stream:
+// the sun may drift off-centre, the orbits may be squashed into tilted
+// ellipses (an orrery seen at an angle) or cut down to partial arcs, and a
+// large ringed planet may take the lead role. Sparse pieces are topped up
+// until the central square holds a minimum number of bodies and coverage.
 
 import type { Rng } from '../random'
 import { chance, int, range, stream, weighted } from '../random'
@@ -43,6 +49,12 @@ export interface Orbit {
   rho: number
   /** Which of the two orbit colours. */
   tone: number
+  /** Minor/major axis ratio (1 for a circle) and tilt of the major axis. */
+  q: number
+  tilt: number
+  /** Start and angular span of the drawn arc (TAU for a full orbit). */
+  a0: number
+  span: number
 }
 
 export interface Sparkle {
@@ -71,6 +83,12 @@ export interface Scene {
 }
 
 const TAU = Math.PI * 2
+/** Least share of the central square covered by bodies, and least sparkles in it. */
+const MIN_COVER = 0.075
+/** Least bodies large enough to read on a thumbnail (R >= SEEN). */
+const MIN_BODIES = 17
+const SEEN = 0.018
+const MIN_SPARKLES = 45
 
 interface Disc { x: number, y: number, r: number }
 
@@ -85,11 +103,33 @@ function clear(x: number, y: number, r: number, obstacles: readonly Disc[], gap:
   return true
 }
 
+/** Point of an orbit at parameter angle a. */
+export function orbitPoint(o: Orbit, a: number, rho = o.rho): [number, number] {
+  const u = Math.cos(a) * rho
+  const v = Math.sin(a) * rho * o.q
+  const c = Math.cos(o.tilt)
+  const s = Math.sin(o.tilt)
+  return [o.cx + u * c - v * s, o.cy + u * s + v * c]
+}
+
 function offBands(x: number, y: number, r: number, orbits: readonly Orbit[], band: number) {
   for (const o of orbits) {
-    const d = Math.hypot(x - o.cx, y - o.cy)
-    if (Math.abs(d - o.rho) < r + band)
-      return false
+    const dx = x - o.cx
+    const dy = y - o.cy
+    const c = Math.cos(o.tilt)
+    const s = Math.sin(o.tilt)
+    const u = dx * c + dy * s
+    const v = (-dx * s + dy * c) / o.q
+    // the radial gap, shrunk by q, never overestimates the true distance
+    if (Math.abs(Math.hypot(u, v) - o.rho) * o.q >= r + band)
+      continue
+    if (o.span < TAU) {
+      const t = ((Math.atan2(v, u) - o.a0) % TAU + TAU) % TAU
+      const m = (r + band) / (o.rho * o.q) + 0.02
+      if (t > o.span + m && t < TAU - m)
+        continue
+    }
+    return false
   }
   return true
 }
@@ -111,9 +151,9 @@ interface Planet {
 }
 
 /** A planet with its moons and maybe a ring. Consumes a fixed number of draws. */
-function planet(r: Rng, Rp: number, moonRate: number, budget: number): Planet {
+function planet(r: Rng, Rp: number, moonRate: number, budget: number, ringRate = Rp < 0.05 ? 0.3 : 0.16): Planet {
   const nMoons = weighted(r, [[0, 1 - moonRate], [1, moonRate * 0.45], [2, moonRate * 0.35], [3, moonRate * 0.2]] as const)
-  const hasRing = chance(r, 0.16)
+  const hasRing = chance(r, ringRate)
   const rx = Rp * range(r, 1.55, 1.85)
   const ry = rx * range(r, 0.2, 0.32)
   const tilt = range(r, -0.7, 0.7)
@@ -160,10 +200,10 @@ function placeComet(r: Rng, suns: readonly Body[]): Comet {
   const R = range(r, 0.026, 0.036)
   let best: Comet | undefined
   for (let attempt = 0; attempt < 400; attempt++) {
-    const x = range(r, 0.18, 0.82)
-    const y = range(r, 0.18, 0.82)
+    const x = range(r, 0.25, 0.75)
+    const y = range(r, 0.25, 0.75)
     const dir = r() * TAU
-    const len = range(r, 0.26, 0.4) * (attempt < 200 ? 1 : 0.7)
+    const len = range(r, 0.24, 0.36) * (attempt < 200 ? 1 : 0.7)
     const bend = range(r, -0.8, 0.8)
     const tail: Array<[number, number]> = []
     let ok = true
@@ -173,6 +213,9 @@ function placeComet(r: Rng, suns: readonly Body[]): Comet {
       const px = x + Math.cos(a) * len * t
       const py = y + Math.sin(a) * len * t
       tail.push([px, py])
+      // head and tail stay inside the central square, seen on every canvas
+      if (px < 0.07 || px > 0.93 || py < 0.07 || py > 0.93)
+        ok = false
       if (!clear(px, py, R * 1.6, suns.map(s => ({ x: s.x, y: s.y, r: s.sys })), 0.03))
         ok = false
     }
@@ -181,7 +224,7 @@ function placeComet(r: Rng, suns: readonly Body[]): Comet {
       break
     }
   }
-  return best ?? { x: 0.82, y: 0.2, R, tail: [[0.82, 0.2], [0.9, 0.12]] }
+  return best ?? { x: 0.8, y: 0.22, R, tail: [[0.8, 0.22], [0.86, 0.16]] }
 }
 
 function cometDiscs(c: Comet | undefined): Disc[] {
@@ -201,8 +244,32 @@ export function compose(hash: string, system: SystemKind, sky: SkyKind, hasBands
   let ocx = 0.5 + range(r, -0.04, 0.04)
   let ocy = 0.5 + range(r, -0.04, 0.04)
   let core = 0
+  const vr = stream(hash, 'solar')
+  let q = 1
+  let tilt = 0
+  let arcs = false
+  let hero = false
+  let heroTarget: [number, number] = [0.5, 0.5]
   if (system === 'Solar') {
-    const R = range(r, 0.1, 0.17)
+    const shifted = chance(vr, 0.55)
+    const sa = vr() * TAU
+    const sd = range(vr, 0.12, 0.24)
+    hero = chance(vr, 0.3)
+    const ha = (Math.floor(vr() * 4) + 0.5) * Math.PI / 2
+    if (chance(vr, 0.45)) {
+      q = range(vr, 0.5, 0.78)
+      tilt = range(vr, -0.9, 0.9)
+    }
+    arcs = chance(vr, 0.4)
+    if (shifted) {
+      ocx = 0.5 + Math.cos(sa) * sd
+      ocy = 0.5 + Math.sin(sa) * sd
+      heroTarget = [0.5 - Math.cos(sa) * 0.16, 0.5 - Math.sin(sa) * 0.16]
+    }
+    else {
+      heroTarget = [0.5 + Math.cos(ha) * 0.3, 0.5 + Math.sin(ha) * 0.3]
+    }
+    const R = range(r, 0.1, 0.17) * (hero ? 0.7 : 1)
     bodies.push(sunBody(ocx, ocy, R))
     core = R * 1.06
   }
@@ -243,29 +310,63 @@ export function compose(hash: string, system: SystemKind, sky: SkyKind, hasBands
     const reach = farthest(ocx, ocy)
     const arcGap = range(r, 0.1, 0.3)
     const moonRate = range(r, 0.3, 0.6)
-    let edge = core
+    let edge = core / q
     let tone = 0
-    while (edge < reach) {
-      const Rp = 0.032 + 0.068 * r() ** 1.5
-      const budget = Rp * range(r, 1.5, 2.2)
+    const placed: Disc[] = []
+    for (let idx = 0; edge < reach / q; idx++) {
+      const isHero = hero && idx === 0
+      let Rp = 0.032 + 0.068 * r() ** 1.5
+      if (isHero)
+        Rp = range(vr, 0.085, 0.11)
+      const budget = Rp * (isHero ? 2.3 : range(r, 1.5, 2.2))
       const gap = range(r, 0.012, 0.045)
-      const rho = edge + gap + budget
-      edge = rho + budget
-      const kMax = Math.max(1, Math.floor(TAU * rho / (2 * budget + arcGap)))
-      const k = Math.min(kMax, Math.max(2, Math.ceil(kMax * range(r, 0.35, 1))))
+      // spaced along the minor axis, so squashed orbits never crowd
+      const rho = edge + (gap + budget) / q
+      edge = rho + budget / q
+      const kMax = Math.max(1, Math.floor(TAU * rho * (1 + q) / 2 / (2 * budget + arcGap)))
+      let k = Math.min(kMax, Math.max(2, Math.ceil(kMax * range(r, 0.35, 1))))
       const theta0 = r() * TAU
       const slack = (TAU * rho / k - 2 * budget) / rho
-      orbits.push({ cx: ocx, cy: ocy, rho, tone })
+      const orbit: Orbit = { cx: ocx, cy: ocy, rho, tone, q, tilt, a0: 0, span: TAU }
+      if (arcs) {
+        orbit.span = range(vr, 0.8, 1.6) * Math.PI
+        orbit.a0 = vr() * TAU
+        k = Math.max(1, Math.round(k * orbit.span / TAU))
+      }
+      orbits.push(orbit)
       tone = 1 - tone
+      let heroA = 0
+      if (isHero) {
+        // the parameter angle that brings the hero closest to its target
+        let best = Infinity
+        for (let c = 0; c < 72; c++) {
+          const a = orbit.span < TAU ? orbit.a0 + (c + 0.5) / 72 * orbit.span : c * TAU / 72
+          const [x, y] = orbitPoint(orbit, a)
+          const e = Rp * 1.95
+          const out = Math.max(0, e - x, x + e - 1) + Math.max(0, e - y, y + e - 1)
+          const d = Math.hypot(x - heroTarget[0], y - heroTarget[1]) + 8 * out
+          if (d < best) {
+            best = d
+            heroA = a
+          }
+        }
+        k = 1
+      }
       for (let j = 0; j < k; j++) {
-        const p = planet(r, Rp * range(r, 0.7, 1), moonRate, budget)
-        const a = theta0 + j * TAU / k + range(r, -0.3, 0.3) * slack
-        const x = ocx + Math.cos(a) * rho
-        const y = ocy + Math.sin(a) * rho
+        const p = planet(r, isHero ? Rp : Rp * range(r, 0.7, 1), isHero ? 0.9 : moonRate, budget, isHero ? 1 : undefined)
+        const jitter = range(r, -0.3, 0.3)
+        let a = theta0 + j * TAU / k + jitter * slack
+        if (isHero)
+          a = heroA
+        else if (orbit.span < TAU)
+          a = orbit.a0 + (j + 0.5 + jitter * 0.4) / k * orbit.span
+        const [x, y] = orbitPoint(orbit, a)
         const m = p.body.sys
         const inWorld = x > WORLD_MIN - m && x < WORLD_MAX + m && y > WORLD_MIN - m && y < WORLD_MAX + m
-        if (inWorld && clear(x, y, m, blocked, 0.012))
+        if (inWorld && clear(x, y, m, blocked, 0.012) && clear(x, y, m, placed, 0.012)) {
           place(bodies, p, x, y)
+          placed.push({ x, y, r: m })
+        }
       }
     }
   }
@@ -306,6 +407,30 @@ export function compose(hash: string, system: SystemKind, sky: SkyKind, hasBands
     bodies.push({ x, y, R, role: 'speck', sys: R * 1.15, moonOrbit: 0 })
   }
 
+  // ---- minimum density: top up the central square with more small rosettes ----
+  const dr = stream(hash, 'dense')
+  const inSquare = (b: { x: number, y: number }) => b.x > 0 && b.x < 1 && b.y > 0 && b.y < 1
+  let cover = 0
+  let count = 0
+  for (const b of bodies) {
+    if (inSquare(b)) {
+      cover += Math.PI * b.R * b.R
+      if (b.R >= SEEN)
+        count++
+    }
+  }
+  for (let i = 0; i < 1500 && (cover < MIN_COVER || count < MIN_BODIES); i++) {
+    const R = SEEN + 0.018 * dr() ** 1.5
+    const x = range(dr, 0.03, 0.97)
+    const y = range(dr, 0.03, 0.97)
+    if (!clear(x, y, R, obstacles, 0.02) || !offBands(x, y, R, bands, band + 0.012))
+      continue
+    obstacles.push({ x, y, r: R * 1.15 })
+    bodies.push({ x, y, R, role: 'speck', sys: R * 1.15, moonOrbit: 0 })
+    cover += Math.PI * R * R
+    count++
+  }
+
   // ---- sparkles -------------------------------------------------------------
   const sr = stream(hash, 'sky')
   const density = { Quiet: 70, Starry: 170, Teeming: 330, Comet: 150 }[sky]
@@ -323,6 +448,19 @@ export function compose(hash: string, system: SystemKind, sky: SkyKind, hasBands
       continue
     sparkDiscs.push({ x, y, r: s })
     sparkles.push({ x, y, s, kind, rot })
+  }
+  let inside = sparkles.filter(inSquare).length
+  for (let i = 0; i < 1500 && inside < MIN_SPARKLES; i++) {
+    const s = 0.003 + 0.007 * dr() ** 2
+    const x = dr()
+    const y = dr()
+    const kind = int(dr, 0, 99)
+    const rot = dr() * TAU
+    if (!clear(x, y, s, obstacles, 0.008) || !offBands(x, y, s, bands, band + 0.006) || !clear(x, y, s, sparkDiscs, 0.004))
+      continue
+    sparkDiscs.push({ x, y, r: s })
+    sparkles.push({ x, y, s, kind, rot })
+    inside++
   }
 
   return { bodies, orbits, sparkles, comet, band }

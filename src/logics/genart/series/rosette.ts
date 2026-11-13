@@ -57,15 +57,17 @@ interface Palette {
   line: string
   inks: readonly string[]
   warm: readonly number[]
+  /** Night side of small planets: a flat tone laid over the rosette. */
+  shade: string
 }
 
 const PALETTES: Record<Features['Palette'], Palette> = {
-  Velvet: { ground: '#25123a', line: '#7a56a8', inks: ['#fbf3e6', '#e8243c', '#ff8c1a', '#3d9bf0', '#ff86bd', '#ffd447'], warm: [1, 2, 5] },
-  Indigo: { ground: '#0c1636', line: '#4a63a8', inks: ['#f6f2ea', '#f2545b', '#ffb627', '#4ecdf0', '#f5a3c7', '#8f6cf0'], warm: [1, 2, 4] },
-  Lagoon: { ground: '#0a3a3d', line: '#3f8a87', inks: ['#fdf4e3', '#ee3b34', '#ff9b21', '#ffd25a', '#f7a6b4', '#2f63d1'], warm: [1, 2, 3] },
-  Garnet: { ground: '#3a0c1d', line: '#8c3a58', inks: ['#fff3df', '#ff9a1f', '#ffd35c', '#5fc1f2', '#ff5c8e', '#2fa77a'], warm: [1, 2, 4] },
-  Soot: { ground: '#131217', line: '#5c586c', inks: ['#ffffff', '#e63946', '#f6a24a', '#4a86c5', '#f2cf5b', '#ffa8cc'], warm: [1, 2, 4] },
-  Linen: { ground: '#efe5d2', line: '#b39b70', inks: ['#1b2656', '#cc1f36', '#f0661c', '#2d7fc1', '#e8709a', '#f2b630'], warm: [1, 2, 5] },
+  Velvet: { ground: '#25123a', line: '#7a56a8', inks: ['#fbf3e6', '#e8243c', '#ff8c1a', '#3d9bf0', '#ff86bd', '#ffd447'], warm: [1, 2, 5], shade: 'rgba(18, 6, 32, 0.6)' },
+  Indigo: { ground: '#0c1636', line: '#4a63a8', inks: ['#f6f2ea', '#f2545b', '#ffb627', '#4ecdf0', '#f5a3c7', '#8f6cf0'], warm: [1, 2, 4], shade: 'rgba(5, 10, 30, 0.6)' },
+  Lagoon: { ground: '#0a3a3d', line: '#3f8a87', inks: ['#fdf4e3', '#ee3b34', '#ff9b21', '#ffd25a', '#f7a6b4', '#2f63d1'], warm: [1, 2, 3], shade: 'rgba(3, 30, 32, 0.6)' },
+  Garnet: { ground: '#3a0c1d', line: '#8c3a58', inks: ['#fff3df', '#ff9a1f', '#ffd35c', '#5fc1f2', '#ff5c8e', '#2fa77a'], warm: [1, 2, 4], shade: 'rgba(30, 4, 14, 0.6)' },
+  Soot: { ground: '#131217', line: '#5c586c', inks: ['#ffffff', '#e63946', '#f6a24a', '#4a86c5', '#f2cf5b', '#ffa8cc'], warm: [1, 2, 4], shade: 'rgba(8, 8, 10, 0.6)' },
+  Linen: { ground: '#efe5d2', line: '#b39b70', inks: ['#1b2656', '#cc1f36', '#f0661c', '#2d7fc1', '#e8709a', '#f2b630'], warm: [1, 2, 5], shade: 'rgba(27, 38, 86, 0.32)' },
 }
 
 // ---------------------------------------------------------------------------
@@ -108,50 +110,73 @@ function visible(v: View, x: number, y: number, r: number) {
   return x + r > v.x0 && x - r < v.x1 && y + r > v.y0 && y - r < v.y1
 }
 
-/** Does the annulus [rho - w, rho + w] around (cx, cy) cross the view? */
-function circleVisible(v: View, cx: number, cy: number, rho: number, w: number) {
+/** Does the annulus [inner - w, rho + w] around (cx, cy) cross the view? */
+function circleVisible(v: View, cx: number, cy: number, rho: number, w: number, inner = rho) {
   const nx = Math.max(v.x0, Math.min(cx, v.x1))
   const ny = Math.max(v.y0, Math.min(cy, v.y1))
   const near = Math.hypot(nx - cx, ny - cy)
   const far = Math.max(Math.hypot(v.x0 - cx, v.y0 - cy), Math.hypot(v.x1 - cx, v.y0 - cy), Math.hypot(v.x0 - cx, v.y1 - cy), Math.hypot(v.x1 - cx, v.y1 - cy))
-  return near <= rho + w && far >= rho - w
+  return near <= rho + w && far >= inner - w
 }
 
 type Stitch = 'line' | 'dotted' | 'zigzag' | 'wave'
 
-/** One orbit path, stitched around a centre. All sizes in world units. */
-function stitch(g: CanvasRenderingContext2D, v: View, cx: number, cy: number, rho: number, kind: Stitch, amp: number, width: number) {
-  const X = px(v, cx)
-  const Y = py(v, cy)
-  const R = rho * v.S
+interface Track {
+  cx: number
+  cy: number
+  rho: number
+  q: number
+  tilt: number
+  a0: number
+  span: number
+}
+
+/**
+ * One orbit path, stitched along a circle, a tilted ellipse or an arc of
+ * either. The motif is laid out on the circle and mapped by the ellipse's
+ * affine transform, which maps quadratic curves exactly; dots stay round.
+ * All sizes in world units.
+ */
+function stitch(g: CanvasRenderingContext2D, v: View, t: Track, kind: Stitch, amp: number, width: number) {
+  const X = px(v, t.cx)
+  const Y = py(v, t.cy)
+  const R = t.rho * v.S
   const A = amp * v.S
-  g.lineWidth = Math.max(0.5, width * v.S)
-  g.beginPath()
-  if (kind === 'line') {
-    g.arc(X, Y, R, 0, TAU)
-    g.stroke()
-    return
+  const c = Math.cos(t.tilt)
+  const sn = Math.sin(t.tilt)
+  const q = t.q
+  const at = (a: number, rr: number): [number, number] => {
+    const u = Math.cos(a) * rr
+    const w = Math.sin(a) * rr * q
+    return [X + u * c - w * sn, Y + u * sn + w * c]
   }
-  if (kind === 'dotted') {
-    const n = Math.max(12, Math.round(TAU * rho / (width * 4.5)))
-    const s = Math.max(0.5, width * 0.9 * v.S)
-    for (let k = 0; k < n; k++) {
-      const a = k * TAU / n
-      const x = X + Math.cos(a) * R
-      const y = Y + Math.sin(a) * R
+  const full = t.span >= TAU
+  const frac = t.span / TAU
+  const dots = (pts: Array<[number, number]>, s: number) => {
+    g.beginPath()
+    for (const [x, y] of pts) {
       g.moveTo(x + s, y)
       g.arc(x, y, s, 0, TAU)
     }
     g.fill()
-    return
   }
-  if (kind === 'zigzag') {
-    const n = Math.max(8, 2 * Math.round(TAU * rho / (amp * 2.1) / 2))
+  g.lineWidth = Math.max(0.5, width * v.S)
+  g.beginPath()
+  if (kind === 'line') {
+    g.ellipse(X, Y, R, R * q, t.tilt, t.a0, t.a0 + t.span)
+    g.stroke()
+  }
+  else if (kind === 'dotted') {
+    const n = Math.max(12, Math.round(TAU * t.rho * frac / (width * 4.5)))
+    const pts: Array<[number, number]> = []
+    for (let k = 0; k < n + (full ? 0 : 1); k++)
+      pts.push(at(t.a0 + k * t.span / n, R))
+    dots(pts, Math.max(0.5, width * 0.9 * v.S))
+  }
+  else if (kind === 'zigzag') {
+    const n = Math.max(8, 2 * Math.round(TAU * t.rho * frac / (amp * 2.1) / 2))
     for (let k = 0; k <= n; k++) {
-      const a = k * TAU / n
-      const rr = R + (k % 2 ? A : -A)
-      const x = X + Math.cos(a) * rr
-      const y = Y + Math.sin(a) * rr
+      const [x, y] = at(t.a0 + k * t.span / n, R + (k % 2 ? A : -A))
       if (k === 0)
         g.moveTo(x, y)
       else
@@ -159,40 +184,34 @@ function stitch(g: CanvasRenderingContext2D, v: View, cx: number, cy: number, rh
     }
     g.stroke()
     // a bead on every outer tip
-    g.beginPath()
-    const s = Math.max(0.6, width * 1.2 * v.S)
-    for (let k = 1; k < n; k += 2) {
-      const a = k * TAU / n
-      const x = X + Math.cos(a) * (R + A)
-      const y = Y + Math.sin(a) * (R + A)
-      g.moveTo(x + s, y)
-      g.arc(x, y, s, 0, TAU)
+    const pts: Array<[number, number]> = []
+    for (let k = 1; k < n; k += 2)
+      pts.push(at(t.a0 + k * t.span / n, R + A))
+    dots(pts, Math.max(0.6, width * 1.2 * v.S))
+  }
+  else {
+    // wave: one quadratic per half wavelength, its control point pushed out or in
+    const n = Math.max(8, 2 * Math.round(TAU * t.rho * frac / (amp * 5) / 2))
+    const [sx, sy] = at(t.a0, R)
+    g.moveTo(sx, sy)
+    for (let k = 0; k < n; k++) {
+      const a0 = t.a0 + k * t.span / n
+      const a1 = t.a0 + (k + 1) * t.span / n
+      const rc = (R + (k % 2 ? 1.5 * A : -1.5 * A)) / Math.cos((a1 - a0) / 2)
+      const [qx, qy] = at((a0 + a1) / 2, rc)
+      const [ex, ey] = at(a1, R)
+      g.quadraticCurveTo(qx, qy, ex, ey)
     }
-    g.fill()
-    return
+    g.stroke()
+    // a dot cupped in every inner trough
+    const pts: Array<[number, number]> = []
+    for (let k = 0; k < n; k += 2)
+      pts.push(at(t.a0 + (k + 0.5) * t.span / n, R + 0.9 * A))
+    dots(pts, Math.max(0.6, width * 1.1 * v.S))
   }
-  // wave: one quadratic per half wavelength, its control point pushed out or in
-  const n = Math.max(8, 2 * Math.round(TAU * rho / (amp * 5) / 2))
-  g.moveTo(X + R, Y)
-  for (let k = 0; k < n; k++) {
-    const a0 = k * TAU / n
-    const a1 = (k + 1) * TAU / n
-    const am = (a0 + a1) / 2
-    const rc = (R + (k % 2 ? 1.5 * A : -1.5 * A)) / Math.cos((a1 - a0) / 2)
-    g.quadraticCurveTo(X + Math.cos(am) * rc, Y + Math.sin(am) * rc, X + Math.cos(a1) * R, Y + Math.sin(a1) * R)
-  }
-  g.stroke()
-  // a dot cupped in every inner trough
-  g.beginPath()
-  const s = Math.max(0.6, width * 1.1 * v.S)
-  for (let k = 0; k < n; k += 2) {
-    const am = (k + 0.5) * TAU / n
-    const x = X + Math.cos(am) * (R + 0.9 * A)
-    const y = Y + Math.sin(am) * (R + 0.9 * A)
-    g.moveTo(x + s, y)
-    g.arc(x, y, s, 0, TAU)
-  }
-  g.fill()
+  // an arc ends on two knots, like a thread tied off
+  if (!full)
+    dots([at(t.a0, R), at(t.a0 + t.span, R)], Math.max(1, width * 2.4 * v.S))
 }
 
 function sparklePath(g: CanvasRenderingContext2D, x: number, y: number, s: number, rot: number, points: number, pinch: number) {
@@ -290,6 +309,41 @@ function drawRing(g: CanvasRenderingContext2D, v: View, b: Body, inks: readonly 
   g.restore()
 }
 
+/**
+ * A crescent of shade on the side away from the nearest sun, so a small
+ * rosette reads as a lit planet: the body disc minus the same disc moved
+ * towards the light.
+ */
+function drawNightSide(g: CanvasRenderingContext2D, v: View, b: Body, suns: readonly Body[], shade: string) {
+  let sx = 0.5
+  let sy = 0.5
+  let best = Infinity
+  for (const s of suns) {
+    const d = Math.hypot(s.x - b.x, s.y - b.y)
+    if (d < best) {
+      best = d
+      sx = s.x
+      sy = s.y
+    }
+  }
+  const l = Math.hypot(sx - b.x, sy - b.y) || 1
+  const X = px(v, b.x)
+  const Y = py(v, b.y)
+  const R = b.R * v.S
+  const off = R * 0.5
+  g.save()
+  g.beginPath()
+  g.arc(X, Y, R, 0, TAU)
+  g.clip()
+  g.beginPath()
+  g.arc(X, Y, R, 0, TAU)
+  g.moveTo(X + (sx - b.x) / l * off + R * 1.04, Y + (sy - b.y) / l * off)
+  g.arc(X + (sx - b.x) / l * off, Y + (sy - b.y) / l * off, R * 1.04, 0, TAU)
+  g.fillStyle = shade
+  g.fill('evenodd')
+  g.restore()
+}
+
 function drawComet(g: CanvasRenderingContext2D, v: View, c: Comet, head: Rosette, pal: Palette, tones: readonly number[]) {
   const pts = c.tail.map(([x, y]) => [px(v, x), py(v, y)] as const)
   const R = c.R * v.S
@@ -369,14 +423,14 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
   const stitchKind: Record<Features['Orbits'], Stitch> = { Bare: 'line', Thread: 'line', Zigzag: 'zigzag', Wave: 'wave' }
   if (bands) {
     for (const o of scene.orbits as Orbit[]) {
-      if (!circleVisible(v, o.cx, o.cy, o.rho, scene.band))
+      if (!circleVisible(v, o.cx, o.cy, o.rho, scene.band, o.rho * o.q))
         continue
       const kind: Stitch = f.Orbits === 'Thread' && o.tone ? 'dotted' : stitchKind[f.Orbits]
       g.strokeStyle = tones[o.tone]
       g.fillStyle = tones[o.tone]
       g.lineJoin = 'round'
       g.lineCap = 'round'
-      stitch(g, v, o.cx, o.cy, o.rho, kind, scene.band * 0.8, kind === 'line' ? 0.003 : 0.0034)
+      stitch(g, v, o, kind, scene.band * 0.8, kind === 'line' ? 0.003 : 0.0034)
     }
   }
   // moon orbits: a fine dotted thread, or the band style itself in a cluster
@@ -387,7 +441,7 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
     const kind: Stitch = cluster ? stitchKind[f.Orbits] : 'dotted'
     g.strokeStyle = cluster ? tones[1] : tones[0]
     g.fillStyle = g.strokeStyle
-    stitch(g, v, b.x, b.y, b.moonOrbit, kind, b.R * 0.09, cluster ? 0.0022 : 0.0016)
+    stitch(g, v, { cx: b.x, cy: b.y, rho: b.moonOrbit, q: 1, tilt: 0, a0: 0, span: TAU }, kind, b.R * 0.09, cluster ? 0.0022 : 0.0016)
   }
 
   // ---- sky ---------------------------------------------------------------------
@@ -398,6 +452,7 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
   if (scene.comet)
     drawComet(g, v, scene.comet, cometHead, pal, cometTones)
 
+  const suns = scene.bodies.filter(b => b.role === 'sun')
   // ---- bodies, each cut out of the ground by a halo -----------------------------
   for (let i = 0; i < scene.bodies.length; i++) {
     const b = scene.bodies[i]
@@ -412,6 +467,8 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
     g.fill()
     drawRing(g, v, b, ringInks, pal.ground, false)
     drawRosette(g, X, Y, R, designs[i], pal.inks, pal.ground)
+    if ((b.role === 'planet' && b.R < 0.06) || b.role === 'moon')
+      drawNightSide(g, v, b, suns, pal.shade)
     drawRing(g, v, b, ringInks, pal.ground, true)
   }
   g.restore()
