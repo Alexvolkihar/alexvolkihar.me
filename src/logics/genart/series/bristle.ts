@@ -81,9 +81,9 @@ interface Density {
 }
 
 const DENSITY: Record<Features['Density'], Density> = {
-  Sparse: { per: 13000, width: 0.0028 },
-  Dense: { per: 19000, width: 0.0024 },
-  Lush: { per: 26000, width: 0.0021 },
+  Sparse: { per: 11500, width: 0.0028 },
+  Dense: { per: 16500, width: 0.0024 },
+  Lush: { per: 22000, width: 0.0021 },
 }
 
 /** Light levels per ink: one batch each. */
@@ -102,15 +102,21 @@ function mixHex(a: string, b: string, t: number): [number, number, number] {
 
 const css = (c: [number, number, number], a = 1) => `rgba(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])},${a})`
 
-/** Shadow, ink, then a partial move towards the light colour. */
+/**
+ * Shadow, ink, then a partial move towards the light colour; bright inks move
+ * less, so a lit yellow stays yellow instead of washing out to cream.
+ */
 function ramp(pal: Palette, ink: string): [number, number, number][] {
   const out: [number, number, number][] = []
+  const [r, g, b] = hex(ink)
+  const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+  const lift = 0.62 * (1 - 0.5 * lum)
   for (let l = 0; l < NL; l++) {
     const t = l / (NL - 1)
     if (t < 0.55)
       out.push(mixHex(pal.shade, ink, t / 0.55))
     else
-      out.push(mixHex(ink, pal.light, (t - 0.55) / 0.45 * 0.62))
+      out.push(mixHex(ink, pal.light, (t - 0.55) / 0.45 * lift))
   }
   return out
 }
@@ -167,19 +173,24 @@ function render(ctx: CanvasRenderingContext2D, W: number, H: number, hash: strin
   // A stroke is a quadratic curve drawn in two halves: the root half at full
   // width, the tip half at half width, which tapers it. Each batch (light
   // level x ink x half) is SVG path data in 1/8 pixel integer units, parsed
-  // once by Path2D and stroked in one call. Strokes no wider than about a
-  // pixel are drawn one pixel wide with their alpha scaled by their width,
-  // which is what the canvas does for hairlines anyway, and far faster.
+  // once by Path2D and stroked in one call. Strokes no wider than 1.6 px are
+  // drawn one pixel wide with their alpha scaled by their width, so the ink
+  // per stroke, and the density, is the same at every size; hairlines are
+  // also far faster to rasterise.
   const Q = 8
   const Z = S * Q
-  const alpha = f.Palette === 'Linen' ? 0.56 : 0.55
+  const chords = S <= 1000
+  const alpha = f.Palette === 'Linen' ? 0.6 : 0.6
   const lineW: number[] = []
   const colors: string[][] = []
   for (let part = 0; part < 2; part++) {
     const wpx = den.width * S * (part ? 0.5 : 1)
     const thin = wpx <= 1.6
-    lineW.push((thin ? Math.min(1, wpx) : wpx) * Q)
-    const a = Math.min(1, alpha * (thin ? Math.max(1, wpx) : 1))
+    lineW.push((thin ? 1 : wpx) * Q)
+    // a hairline carries `wpx` times the ink of a 1 px line; the 1.05 was
+    // measured so that a 600 px render and a 2400 px one scaled down to 600
+    // have the same mean tone
+    const a = Math.min(1, alpha * (thin ? wpx * 1.05 : 1))
     colors.push(pal.inks.flatMap(c => ramp(pal, c).map(rgb => css(rgb, a))))
   }
   const paths: string[] = Array.from<string>({ length: 2 * 4 * NL }).fill('')
@@ -215,6 +226,10 @@ function render(ctx: CanvasRenderingContext2D, W: number, H: number, hash: strin
   let mix2 = 0
   /** Share of the patch bend an emitter keeps (bursts stay nearly straight). */
   let bendK = 1
+  /** Light contrast of the current patch. */
+  let contrast = 1
+  /** Strokes per unit area in the current patch. */
+  let per = den.per
 
   /**
    * One tapered stroke rooted at (x, y), heading `a`, of length `L`, lit `b`
@@ -237,8 +252,13 @@ function render(ctx: CanvasRenderingContext2D, W: number, H: number, hash: strin
     let cx = x + dx * L * 0.5 - dy * bend * L * 0.3
     let cy = y + dy * L * 0.5 + dx * bend * L * 0.3
     if (mod.kind === 'Drooping' || mod.kind === 'Windswept') {
-      tx += mod.gx * L
-      ty += mod.gy * L
+      // the pull turns the stroke but never shortens it much: a stroke that
+      // points against it would otherwise shrink and leave a dark gap
+      const ex = dx + mod.gx
+      const ey = dy + mod.gy
+      const k = L * Math.max(0.85, Math.hypot(ex, ey)) / (Math.hypot(ex, ey) || 1)
+      tx = x + ex * k
+      ty = y + ey * k
       cx += mod.gx * L * 0.3
       cy += mod.gy * L * 0.3
     }
@@ -251,7 +271,7 @@ function render(ctx: CanvasRenderingContext2D, W: number, H: number, hash: strin
       cx += ex * 0.2
       cy += ey * 0.2
     }
-    let lvl = Math.floor((b + (hr() - 0.5) * 0.3) * NL)
+    let lvl = Math.floor((0.5 + (b - 0.5) * contrast + (hr() - 0.5) * 0.3 * contrast) * NL)
     lvl = lvl < 0 ? 0 : lvl >= NL ? NL - 1 : lvl
     const ink = hr() < mix2 ? ink2 : ink1
     // de Casteljau split at t = 1/2
@@ -262,13 +282,34 @@ function render(ctx: CanvasRenderingContext2D, W: number, H: number, hash: strin
     const mx = (ax + bx) * 0.5
     const my = (ay + by) * 0.5
     const k = (lvl * 4 + ink) * 2
-    const m = ` ${(mx * Z) | 0} ${(my * Z) | 0}`
-    paths[k] += `M${(x * Z) | 0} ${(y * Z) | 0}Q${(ax * Z) | 0} ${(ay * Z) | 0}${m}`
-    paths[k + 1] += `M${m}Q${(bx * Z) | 0} ${(by * Z) | 0} ${(tx * Z) | 0} ${(ty * Z) | 0}`
-    pending++
+    // integer path data, relative after the first point (short numbers parse
+    // fast); on small canvases each half is a straight chord, since the
+    // midpoint already lies on the curve
+    const X0 = (x * Z) | 0
+    const Y0 = (y * Z) | 0
+    const XM = (mx * Z) | 0
+    const YM = (my * Z) | 0
+    if (chords) {
+      paths[k] += `M${X0} ${Y0}l${XM - X0} ${YM - Y0}`
+      paths[k + 1] += `M${XM} ${YM}l${((tx * Z) | 0) - XM} ${((ty * Z) | 0) - YM}`
+    }
+    else {
+      paths[k] += `M${X0} ${Y0}q${((ax * Z) | 0) - X0} ${((ay * Z) | 0) - Y0} ${XM - X0} ${YM - Y0}`
+      paths[k + 1] += `M${XM} ${YM}q${((bx * Z) | 0) - XM} ${((by * Z) | 0) - YM} ${((tx * Z) | 0) - XM} ${((ty * Z) | 0) - YM}`
+    }
+    // bounded batches: one huge path strokes slower than several short ones
+    if (++pending >= 600)
+      flush()
   }
 
   // --- emitters -----------------------------------------------------------------
+  /**
+   * Strokes per unit area for strokes of mean length `L`: long strokes get
+   * fewer of them, so the ink laid per unit area (count x length) is capped
+   * and the render time with it.
+   */
+  const budget = (L: number) => per * Math.min(1, 0.06 / L)
+
   const grid = (poly: Poly, q: number[]) => {
     const s = 0.05 + 0.045 * q[6]
     const rot = q[7] < 0.6 ? 0 : (q[7] - 0.6) * 2
@@ -295,7 +336,7 @@ function render(ctx: CanvasRenderingContext2D, W: number, H: number, hash: strin
       }
     }
     centres.sort((a, b) => a[1] - b[1] || a[0] - b[0])
-    const n = Math.max(12, Math.round(den.per * s * rowH))
+    const n = Math.max(12, Math.round(budget(R * 0.85) * s * rowH))
     const pxo = Math.cos(pd) * R * 0.9
     const pyo = Math.sin(pd) * R * 0.9
     for (const [x0, y0] of centres) {
@@ -323,8 +364,8 @@ function render(ctx: CanvasRenderingContext2D, W: number, H: number, hash: strin
       cx = (cx + gx) / 2
       cy = (cy + gy) / 2
     }
-    const n = Math.round(den.per * Math.abs(area(poly)) * 0.9)
     const lb = 0.05 + 0.045 * q[8]
+    const n = Math.round(budget(lb * 0.95) * Math.abs(area(poly)) * 0.9)
     const lambda = 0.04 + 0.05 * q[9]
     const rays = 2 * Math.PI / (10 + Math.floor(q[10] * 16))
     for (let k = 0; k < n; k++) {
@@ -342,8 +383,6 @@ function render(ctx: CanvasRenderingContext2D, W: number, H: number, hash: strin
       const aq = Math.round(a / rays) * rays
       const reach = rr + L * 1.2
       hair(cx + ca * rr, cy + sa * rr, a + (hr() - 0.5) * 0.18, L, b, cx + Math.cos(aq) * reach, cy + Math.sin(aq) * reach)
-      if (pending >= 500)
-        flush()
     }
     flush()
   }
@@ -353,19 +392,21 @@ function render(ctx: CanvasRenderingContext2D, W: number, H: number, hash: strin
     const s = 0.042 + 0.035 * q[6]
     const amp = s * (0.25 + 1.1 * q[7])
     const freq = 2 * Math.PI / (0.16 + 0.34 * q[8])
-    const shift = q[9] * 2 * Math.PI
+    // rows stay nearly in phase: even gaps, no blotches between them
+    const shift = (q[9] - 0.5) * 0.8
     const lean = (q[10] - 0.5) * 0.7
     const phase0 = q[11] * 2 * Math.PI
     const [bx0, by0, bx1, by1] = bbox(poly)
     const Lmax = s * 1.6
     const sd = distField(poly)
-    const perLen = den.per * s
+    const perLen = budget(s * 1.37) * s
     const dxs = 1 / perLen
     const clump = s * 1.1
     let row = 0
     // top to bottom: each row covers the roots of the one above
     for (let y0 = by0 - amp; y0 <= by1 + amp + Lmax; y0 += s, row++) {
       const ph = phase0 + row * shift
+      const rowTone = (row & 1) * 0.1 - 0.05
       const n = Math.ceil((bx1 - bx0 + 2 * s) * perLen)
       for (let k = 0; k < n; k++) {
         const x = bx0 - s + (k + hr()) * dxs
@@ -377,8 +418,9 @@ function render(ctx: CanvasRenderingContext2D, W: number, H: number, hash: strin
         const nl = Math.hypot(slope, 1)
         const nx = slope / nl
         const ny = -1 / nl
-        const b = 0.5 + 0.6 * (nx * lx + ny * ly) - 0.15 * Math.max(0, -ly)
-        const L = s * (1 + 0.5 * hr()) * (0.82 + 0.36 * b)
+        // lit by the slope of the row, crests a little brighter than troughs
+        const b = 0.52 + 0.38 * (nx * lx + ny * ly) - 0.1 * Math.max(0, -ly) + 0.16 * Math.sin(p) + rowTone
+        const L = s * (1.15 + 0.45 * hr()) * (0.85 + 0.3 * b)
         const pxc = Math.round(x / clump) * clump
         hair(x, y, Math.atan2(ny, nx) + lean + (hr() - 0.5) * 0.5, L, b, pxc + nx * L, y + ny * L * 1.25)
       }
@@ -414,7 +456,7 @@ function render(ctx: CanvasRenderingContext2D, W: number, H: number, hash: strin
       v0 = Math.min(v0, v)
       v1 = Math.max(v1, v)
     }
-    const perLen = den.per * sp
+    const perLen = budget(Lb) * sp
     const sides: [number, number, number][] = []
     for (const side of [1, -1]) {
       // the barb heading: across the spine, turned forward along it
@@ -500,7 +542,8 @@ function render(ctx: CanvasRenderingContext2D, W: number, H: number, hash: strin
       cx: gx + (q[13] - 0.5) * 0.4 * (bx1 - bx0),
       cy: gy + (q[14] - 0.5) * 0.4 * (by1 - by0),
       irho2: 1 / (rho * rho),
-      spin: dir * (1.6 + 1.6 * q[5]),
+      // a swirl on a burst stays gentle: the rays should still read
+      spin: dir * (1.6 + 1.6 * q[5]) * (emitter === 'Burst' ? 0.4 : 1),
       gx: gax,
       gy: gay,
       pinch: 0.45 + 0.3 * q[5],
@@ -523,6 +566,13 @@ function render(ctx: CanvasRenderingContext2D, W: number, H: number, hash: strin
     layerX = ox
     layerY = oy
     bendK = emitter === 'Burst' ? 0.3 : 1
+    // gusts flatten the light and thin the cover: give them more of both
+    contrast = motion === 'Windswept' ? 1.3 : 1
+    per = motion === 'Windswept' ? Math.max(den.per, 14500) : den.per
+    // waves always mix in a second ink, so crests and troughs never read as
+    // two-tone bands
+    if (emitter === 'Waves')
+      mix2 = Math.max(mix2, 0.22)
     if (emitter === 'Grid')
       grid(poly, q)
     else if (emitter === 'Burst')
