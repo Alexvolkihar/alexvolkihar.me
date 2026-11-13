@@ -43,8 +43,13 @@ export interface GrowOptions {
   aw: number
   ah: number
   margin: number
-  /** When set, agents also stop outside this centred disc (radius in short sides). */
-  disc: number
+  /**
+   * When rx > 0, agents also stop outside this centred ellipse (semi-axes in
+   * short sides) and inside its centred hole (a fraction of the ellipse).
+   */
+  rx: number
+  ry: number
+  hole: number
   /** Occupancy cell and step length. */
   cell: number
   step: number
@@ -56,6 +61,20 @@ export interface GrowOptions {
   maxAgents: number
   /** Drift field: heading at a point. */
   field: (x: number, y: number) => number
+  /**
+   * Optional guide: every agent's heading (a sway's axis) is pulled towards
+   * this heading by `guideRate` per step, so strands follow the arrangement.
+   */
+  guide: ((x: number, y: number) => number) | null
+  guideRate: number
+  /**
+   * Coverage: once every agent has stopped, find the widest empty spot (the
+   * point farthest from any trail and from the edge of the domain) and, while
+   * it is wider than `gap`, ask `spawn` for a new group there.
+   */
+  gap: number
+  refills: number
+  spawn: (x: number, y: number, room: number) => Seed[]
 }
 
 export interface Strand {
@@ -114,8 +133,25 @@ export function grow(seeds: readonly Seed[], groups: readonly Steering[], o: Gro
   const y1 = o.ah - o.margin
   const dcx = o.aw / 2
   const dcy = o.ah / 2
-  const dr2 = o.disc > 0 ? o.disc * o.disc : Infinity
-  const inside = (x: number, y: number) => x > x0 && x < x1 && y > y0 && y < y1 && (x - dcx) * (x - dcx) + (y - dcy) * (y - dcy) < dr2
+  const irx = o.rx > 0 ? 1 / o.rx : 0
+  const iry = o.rx > 0 ? 1 / o.ry : 0
+  const hole2 = o.hole * o.hole
+  const inside = (x: number, y: number) => {
+    if (!(x > x0 && x < x1 && y > y0 && y < y1))
+      return false
+    if (o.rx <= 0)
+      return true
+    const u = (x - dcx) * irx
+    const v = (y - dcy) * iry
+    const q = u * u + v * v
+    return q < 1 && q > hole2
+  }
+  // coarse occupancy for the coverage search, about 0.02 short sides a cell
+  const kc = Math.max(1, Math.round(0.02 / o.cell))
+  const cw = o.cell * kc
+  const mx = Math.ceil(nx / kc)
+  const my = Math.ceil(ny / kc)
+  const coarse = new Uint8Array(mx * my)
   const kmax = 1 / (2.4 * o.cell)
 
   function spawn(x: number, y: number, h: number, group: number, gen: number, parent: number, rr: Rng) {
@@ -147,10 +183,8 @@ export function grow(seeds: readonly Seed[], groups: readonly Steering[], o: Gro
     agents.push(a)
     // a seed claims its cell; a fork shares its parent's
     const c = a.cy * nx + a.cx
-    if (parent < 0 && owner[c] < 0) {
-      owner[c] = a.id
-      stamp[c] = 0
-    }
+    if (parent < 0 && owner[c] < 0)
+      claim(a, c)
   }
 
   for (const s of seeds) {
@@ -175,12 +209,92 @@ export function grow(seeds: readonly Seed[], groups: readonly Steering[], o: Gro
   function claim(a: Agent, c: number) {
     owner[c] = a.id
     stamp[c] = a.age
+    coarse[Math.floor(Math.floor(c / nx) / kc) * mx + Math.floor((c % nx) / kc)] = 1
+  }
+
+  // The widest empty spot: a chamfer distance transform of the coarse grid,
+  // where trails and everything outside the domain count as full.
+  const dist = new Float32Array(mx * my)
+  function emptiest() {
+    for (let j = 0; j < my; j++) {
+      for (let i = 0; i < mx; i++) {
+        const c = j * mx + i
+        dist[c] = coarse[c] || !inside((i + 0.5) * cw, (j + 0.5) * cw) ? 0 : 1e9
+      }
+    }
+    for (let j = 0; j < my; j++) {
+      for (let i = 0; i < mx; i++) {
+        const c = j * mx + i
+        let v = dist[c]
+        if (v === 0)
+          continue
+        if (i > 0)
+          v = Math.min(v, dist[c - 1] + 1)
+        if (j > 0) {
+          v = Math.min(v, dist[c - mx] + 1)
+          if (i > 0)
+            v = Math.min(v, dist[c - mx - 1] + 1.4142)
+          if (i < mx - 1)
+            v = Math.min(v, dist[c - mx + 1] + 1.4142)
+        }
+        dist[c] = v
+      }
+    }
+    let best = -1
+    let bd = 0
+    for (let j = my - 1; j >= 0; j--) {
+      for (let i = mx - 1; i >= 0; i--) {
+        const c = j * mx + i
+        let v = dist[c]
+        if (v === 0)
+          continue
+        if (i < mx - 1)
+          v = Math.min(v, dist[c + 1] + 1)
+        if (j < my - 1) {
+          v = Math.min(v, dist[c + mx] + 1)
+          if (i < mx - 1)
+            v = Math.min(v, dist[c + mx + 1] + 1.4142)
+          if (i > 0)
+            v = Math.min(v, dist[c + mx - 1] + 1.4142)
+        }
+        dist[c] = v
+        if (v >= bd) {
+          bd = v
+          best = c
+        }
+      }
+    }
+    if (best < 0)
+      return null
+    return { x: (best % mx + 0.5) * cw, y: (Math.floor(best / mx) + 0.5) * cw, room: (bd - 0.5) * cw }
   }
 
   let steps = 0
   const live = agents.slice()
   const d = o.step
-  while (live.length && steps < o.maxSteps) {
+  let refills = 0
+  for (;;) {
+    if (!live.length) {
+      // every agent has stopped: seed a new group in the widest empty spot
+      if (refills >= o.refills || steps >= o.maxSteps)
+        break
+      const spot = emptiest()
+      if (!spot || spot.room < o.gap)
+        break
+      refills++
+      const before = agents.length
+      for (const sd of o.spawn(spot.x, spot.y, spot.room)) {
+        if (inside(sd.x, sd.y))
+          spawn(sd.x, sd.y, sd.heading, sd.group, 0, -1, r)
+      }
+      if (agents.length === before)
+        break
+      for (let i = before; i < agents.length; i++)
+        live.push(agents[i])
+      continue
+    }
+    if (steps >= o.maxSteps)
+      break
     for (let i = 0; i < live.length; i++) {
       const a = live[i]
       if (!a.alive)
@@ -203,6 +317,17 @@ export function grow(seeds: readonly Seed[], groups: readonly Steering[], o: Gro
         case 'Drift':
           a.h += wrap(o.field(a.x, a.y) - a.h) * st.rate + a.sign * a.k * d
           break
+      }
+      if (o.guide) {
+        const gh = o.guide(a.x, a.y)
+        if (st.kind === 'Sway') {
+          const pull = wrap(gh - a.base) * o.guideRate
+          a.base += pull
+          a.h += pull
+        }
+        else {
+          a.h += wrap(gh - a.h) * o.guideRate
+        }
       }
       const px = a.x
       const py = a.y
