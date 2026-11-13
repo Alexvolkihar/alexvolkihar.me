@@ -23,7 +23,12 @@ export interface Box { x: number, y: number, w: number, h: number }
 
 export type PanelKind = 'front' | 'section' | 'side' | 'schedule'
 
-export interface Panel { kind: PanelKind, box: Box }
+export interface Panel {
+  kind: PanelKind
+  box: Box
+  /** Under the plan and lined up with it (rows), or free-standing beside it (column). */
+  aligned: boolean
+}
 
 export interface Layout {
   rot: 0 | 1
@@ -127,17 +132,26 @@ export function chooseLayout(L: LayoutInput): Layout {
   let best: Layout | null = null
   let bestScore = -Infinity
   const rowsOpts: PanelKind[][] = [[], [L.row], [L.row, L.row === 'front' ? 'section' : 'front']]
-  const colOpts: PanelKind[][] = [[], ['schedule'], ['side'], ['schedule', 'side']]
+  // column beside the plan: up to two drawings, stacked in this order
+  const pool: PanelKind[] = ['schedule', 'front', 'section', 'side']
+  const colOpts: PanelKind[][] = [[]]
+  for (let i = 0; i < pool.length; i++) {
+    colOpts.push([pool[i]])
+    for (let j = i + 1; j < pool.length; j++) colOpts.push([pool[i], pool[j]])
+  }
   for (const rot of [0, 1] as const) {
     const pw = rot ? L.eh : L.ew
     const ph = rot ? L.ew : L.eh
     const sideW = (rot ? L.bw : L.bh) + 12
+    const frontW = (rot ? L.bh : L.bw) + 12
     for (const rows of rowsOpts) {
       for (const cols of colOpts) {
+        if (cols.some(c => rows.includes(c)))
+          continue
         const extra = rows.length + cols.length
         const cap = extra ? CAP : 0
         const leftH = ph + cap + rows.length * (GAP + L.elevH)
-        const size = (p: PanelKind) => p === 'schedule' ? L.schedule : { w: sideW, h: L.elevH }
+        const size = (p: PanelKind) => p === 'schedule' ? L.schedule : { w: p === 'side' ? sideW : frontW, h: L.elevH }
         let colW = 0
         let colH = 0
         for (const c of cols) {
@@ -150,12 +164,14 @@ export function chooseLayout(L: LayoutInput): Layout {
         // roughly how much of each drawing's box is actually drawn on
         const body = L.elevH - CAP - 3.2
         let inked = 0.8 * pw * ph + rows.length * 0.85 * pw * body
-        for (const c of cols) inked += c === 'schedule' ? 0.9 * L.schedule.w * L.schedule.h : 0.8 * sideW * body
+        for (const c of cols) inked += c === 'schedule' ? 0.9 * L.schedule.w * L.schedule.h : 0.8 * size(c).w * body
         const fill = (inked * k * k) / (area.w * area.h)
         // empty band left along the sheet's long side
         const band = Math.max(1 - (W * k) / area.w, 1 - (H * k) / area.h)
         // scale matters, and so does covering the sheet; extra drawings must earn their place
-        const score = k * (1 - band) ** 3 * Math.sqrt(fill) * (1 - 0.025 * extra)
+        // a lone elevation beside the plan floats in white space
+        const lone = cols.length === 1 && cols[0] !== 'schedule' && !rows.length ? 0.85 : 1
+        const score = k * (1 - band) ** 3 * Math.sqrt(fill) * (1 - 0.025 * extra) * lone
         if (score <= bestScore)
           continue
         bestScore = score
@@ -166,19 +182,17 @@ export function chooseLayout(L: LayoutInput): Layout {
         let y = ly + (ph + cap) * k
         for (const kind of rows) {
           y += GAP * k
-          panels.push({ kind, box: { x: ox, y, w: pw * k, h: L.elevH * k } })
+          panels.push({ kind, aligned: true, box: { x: ox, y, w: pw * k, h: L.elevH * k } })
           y += L.elevH * k
         }
         const cx = ox + (pw + GAP) * k
-        let cy = oy
+        // the column is centred on the sheet, except that a side elevation
+        // stands on the same ground line as the front one under the plan
+        let cy = oy + (H - colH) * k / 2
         for (const kind of cols) {
           const s = size(kind)
-          // a side elevation stands on the same ground line as the front one
-          const alone = cols.length === 1
-          const py = kind === 'side'
-            ? (rows.length ? ly + leftH * k - s.h * k : (alone ? oy + (H - s.h) * k / 2 : oy + H * k - s.h * k))
-            : cy
-          panels.push({ kind, box: { x: cx + (colW - s.w) * k / 2, y: py, w: s.w * k, h: s.h * k } })
+          const py = kind === 'side' && rows.length ? ly + leftH * k - s.h * k : cy
+          panels.push({ kind, aligned: false, box: { x: cx + (colW - s.w) * k / 2, y: py, w: s.w * k, h: s.h * k } })
           cy += (s.h + GAP) * k
         }
         best = {
@@ -212,7 +226,15 @@ function screenBox(M: Affine, r: Rect) {
 }
 
 /** A volume as seen in an elevation: span along the view, nearness, depth (cells). */
-interface Vol { u0: number, u1: number, near: number, deep: number }
+interface Vol {
+  u0: number
+  u1: number
+  near: number
+  deep: number
+  /** A volume with a ridge at least as high touches this end: the roof stops there, square. */
+  abutL?: boolean
+  abutR?: boolean
+}
 interface Hole { u0: number, u1: number, near: number, kind: OpeningKind, room: RoomType }
 
 /**
@@ -228,6 +250,31 @@ function project(plan: Plan, ms: Rect[], M: Affine, k: number, view: 'front' | '
     ? { u0: (b.x0 - ox) / k, u1: (b.x1 - ox) / k, near: b.y1 / k, deep: (b.y1 - b.y0) / k }
     : { u0: margin + (yMax - b.y1) / k, u1: margin + (yMax - b.y0) / k, near: b.x1 / k, deep: (b.x1 - b.x0) / k }
   const vols = boxes.map(vol)
+  // volumes that touch along a wall seen end-on: the lower roof runs into the higher one
+  const rise = (v: Vol) => Math.min(v.u1 - v.u0, v.deep) / 2
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = 0; j < boxes.length; j++) {
+      if (i === j)
+        continue
+      const a = boxes[i]
+      const b = boxes[j]
+      const ov = view === 'front' ? Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) : Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)
+      if (ov < k || rise(vols[j]) < rise(vols[i]) - 0.01)
+        continue
+      if (view === 'front') {
+        if (Math.abs(b.x1 - a.x0) < 0.5)
+          vols[i].abutL = true
+        if (Math.abs(b.x0 - a.x1) < 0.5)
+          vols[i].abutR = true
+      }
+      else {
+        if (Math.abs(b.y0 - a.y1) < 0.5)
+          vols[i].abutL = true
+        if (Math.abs(b.y1 - a.y0) < 0.5)
+          vols[i].abutR = true
+      }
+    }
+  }
   const holes: Hole[] = []
   for (const p of plan.openings) {
     if (p.kind !== 'window' && p.kind !== 'slide' && p.kind !== 'front')
@@ -509,18 +556,20 @@ export interface ElevationArgs {
   view: 'front' | 'side'
   /** Panel box in pixels. */
   box: Box
+  /** Pixel abscissa of the panel's u = 0 for a front view (box.x when lined up with the plan). */
+  ox: number
   m: Massing
   ink: Ink
 }
 
 /** Draws an elevation into its panel; the context is in panel cells. */
 export function elevation(g: CanvasRenderingContext2D, A: ElevationArgs) {
-  const { plan, ms, M, k, view, box, m, ink } = A
+  const { plan, ms, M, k, view, box, ox, m, ink } = A
   const W = box.w / k
   const H = box.h / k
   const gy = H - CAP - 2.2
   const margin = 6
-  const { vols, holes } = project(plan, ms, M, k, view, box.x, margin)
+  const { vols, holes } = project(plan, ms, M, k, view, ox, margin)
   const eave = m.storeys * SH
   let bu0 = Infinity
   let bu1 = -Infinity
@@ -613,17 +662,28 @@ function roofElev(g: CanvasRenderingContext2D, v: Vol, ye: number, m: Massing, i
   }
   const along = w >= v.deep
   const rise = (Math.min(w, v.deep) / 2) * m.slope
-  const a = v.u0 - OV
-  const b = v.u1 + OV
+  // an end that runs into a higher roof has no overhang and no hip: it stops square
+  const a = v.abutL ? v.u0 : v.u0 - OV
+  const b = v.abutR ? v.u1 : v.u1 + OV
   const drop = OV * m.slope
   let pts: Array<[number, number]>
   let face = true
   if (along) {
     const inset = m.roof === 'hip' ? v.deep / 2 + OV : 0
-    pts = [[a, ye + drop], [b, ye + drop], [b - inset, ye - rise], [a + inset, ye - rise]]
+    pts = [[a, ye + drop], [b, ye + drop], [v.abutR ? b : b - inset, ye - rise], [v.abutL ? a : a + inset, ye - rise]]
   }
   else {
-    pts = [[a, ye + drop], [b, ye + drop], [(a + b) / 2, ye - rise]]
+    // the gable or hip end, cut square where it meets a higher roof
+    const a0 = v.u0 - OV
+    const b0 = v.u1 + OV
+    const mid = (a0 + b0) / 2
+    const h = (u: number) => ye + drop - (ye + drop - (ye - rise)) * (1 - Math.abs(u - mid) / (mid - a0))
+    pts = [[a, ye + drop], [b, ye + drop]]
+    if (v.abutR)
+      pts.push([b, h(b)])
+    pts.push([mid, ye - rise])
+    if (v.abutL)
+      pts.push([a, h(a)])
     face = m.roof === 'hip'
   }
   poly(g, pts)
@@ -676,6 +736,8 @@ export interface SectionArgs {
   M: Affine
   k: number
   box: Box
+  /** Pixel abscissa of the panel's u = 0 (box.x when lined up with the plan). */
+  ox: number
   m: Massing
   ink: Ink
   poche: Poche
@@ -691,7 +753,7 @@ function pocheFill(g: CanvasRenderingContext2D, ink: Ink, poche: Poche) {
 
 /** Cross-section along the cut, seen towards the top of the sheet. */
 export function section(g: CanvasRenderingContext2D, A: SectionArgs) {
-  const { plan, ms, M, k, box, m, ink, poche, cut } = A
+  const { plan, ms, M, k, box, ox, m, ink, poche, cut } = A
   const { pal, pen, rng } = ink
   const W = box.w / k
   const H = box.h / k
@@ -705,8 +767,8 @@ export function section(g: CanvasRenderingContext2D, A: SectionArgs) {
     if (cc < lo || cc >= hi)
       return null
     const p = co === 0 ? [ap(M, r.x0, cc), ap(M, r.x1, cc)] : [ap(M, cc, r.y0), ap(M, cc, r.y1)]
-    const u0 = (Math.min(p[0][0], p[1][0]) - box.x) / k
-    const u1 = (Math.max(p[0][0], p[1][0]) - box.x) / k
+    const u0 = (Math.min(p[0][0], p[1][0]) - ox) / k
+    const u1 = (Math.max(p[0][0], p[1][0]) - ox) / k
     return [u0, u1]
   }
   const eave = m.storeys * SH
@@ -757,7 +819,7 @@ export function section(g: CanvasRenderingContext2D, A: SectionArgs) {
 
   // beyond: whole volumes behind the cut, faint, then the far roofs of the cut ones
   const ycut = (co === 0 ? M.d * cc + M.f : M.b * cc + M.f) / k
-  const fv = project(plan, ms, M, k, 'front', box.x, 0)
+  const fv = project(plan, ms, M, k, 'front', ox, 0)
   const far = fv.vols.filter(v => v.near <= ycut + 0.01).sort((p, q) => p.near - q.near)
   const faint: Ink = { ...ink, shade: false, fade: 0.5 }
   for (const v of far) volume(g, v, fv.holes, gy, m, faint)
@@ -871,9 +933,19 @@ export function section(g: CanvasRenderingContext2D, A: SectionArgs) {
 
   // pitched roofs cut through
   if (m.roof !== 'flat') {
-    for (const v of vols) {
+    // lower roofs first, each stopping square against a higher neighbour
+    const top = (v: typeof vols[number]) => v.along ? Math.min(v.at, v.deep / 2) * m.slope : ((v.u1 - v.u0) / 2) * m.slope
+    for (const v of [...vols].sort((p, q) => top(p) - top(q))) {
       const ye = gy - eave
       const th = 0.9
+      const higher = (side: 0 | 1) => vols.some(o => o !== v && top(o) >= top(v) - 0.01
+        && Math.abs(side ? o.u0 - v.u1 : o.u1 - v.u0) < 0.3)
+      const c0 = higher(0) ? v.u0 : -W
+      const c1 = higher(1) ? v.u1 : 2 * W
+      g.save()
+      g.beginPath()
+      g.rect(c0, -H, c1 - c0, 3 * H)
+      g.clip()
       let outer: Array<[number, number]>
       if (!v.along) {
         const rise = ((v.u1 - v.u0) / 2) * m.slope
@@ -921,6 +993,7 @@ export function section(g: CanvasRenderingContext2D, A: SectionArgs) {
       g.strokeStyle = pal.ink
       g.lineWidth = pen(1.6)
       g.stroke()
+      g.restore()
     }
   }
 

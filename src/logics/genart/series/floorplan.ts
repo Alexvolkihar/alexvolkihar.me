@@ -476,10 +476,13 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
     const ts = [o ? sectionAt2 : sectionAt]
     for (let t = -0.4; t <= 1.4; t += 0.1) ts.push(t)
     const cs = ts.map(t => cutAt(o, Math.max(-0.45, Math.min(1.45, t))))
+    // the cut that crosses the most building; the chosen place wins ties
     const most = Math.max(...cs.map(width))
-    const pick = cs.find(c => width(c) >= most * 0.92)!
-    secCut = cuts.find(c => c[0] === o && width(c[1]) >= most * 0.92) ?? [o, pick]
-    if (!cuts.includes(secCut))
+    secCut = [o, cs.find(c => width(c) >= most - 1e-6)!]
+    const same = cuts.findIndex(c => c[0] === o)
+    if (same >= 0)
+      cuts[same] = secCut
+    else
       cuts.push(secCut)
   }
   {
@@ -540,12 +543,20 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
 
   // the other drawings of the sheet, each in plan units at the plan's scale
   const ink: Ink = { pal, pen: px => (px * P * heavy) / k, rng: stream(hash, 'panels'), shade: pal.kind === 'vellum' || pal.kind === 'kraft' }
+  // the building's left edge on the sheet, to centre a free-standing front view or section
+  let bLeft = Infinity
+  let bRight = -Infinity
+  for (const [x, y] of [[b.x0, b.y0], [b.x1, b.y0], [b.x0, b.y1], [b.x1, b.y1]]) {
+    bLeft = Math.min(bLeft, M.a * x + M.c * y + M.e)
+    bRight = Math.max(bRight, M.a * x + M.c * y + M.e)
+  }
   for (const pn of lay.panels) {
     g.setTransform(k, 0, 0, k, pn.box.x, pn.box.y)
+    const ox = pn.aligned ? pn.box.x : bLeft - (pn.box.w - (bRight - bLeft)) / 2
     if (pn.kind === 'front' || pn.kind === 'side')
-      elevation(g, { plan, ms: vols, M, k, view: pn.kind, box: pn.box, m: mass, ink })
+      elevation(g, { plan, ms: vols, M, k, view: pn.kind, box: pn.box, ox, m: mass, ink })
     else if (pn.kind === 'section' && secCut)
-      section(g, { plan, ms: vols, M, k, box: pn.box, m: mass, ink, poche: f.Poché as Poche, cut: secCut })
+      section(g, { plan, ms: vols, M, k, box: pn.box, ox, m: mass, ink, poche: f.Poché as Poche, cut: secCut })
     else if (pn.kind === 'schedule')
       schedule(g, plan, flats, schematic, f.Poché as Poche, t => zoneColor(t, pal), ink)
   }
