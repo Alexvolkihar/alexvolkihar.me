@@ -12,14 +12,18 @@
 //
 // The torus has a fixed size (N x N cells) whatever the canvas, so a hash
 // gives the same dunes at every size and aspect: from above, a little less
-// than two periods span the canvas short side (turned and gently warped so
-// the copies differ); at a low angle they repeat towards the horizon. Every
-// length is a fraction of the canvas short side.
+// than two periods span the canvas short side (turned and gently warped);
+// beyond the middle of the canvas, shifted copies of the torus keep or drop
+// whole dunes so a wide canvas never shows the period (../dunes/patchwork.ts).
+// At a low angle the camera is aimed at one of the tallest dunes and the
+// field repeats towards the horizon, into the haze. Every length is a
+// fraction of the canvas short side.
 
 import type { Wind } from '../dunes/werner'
 import type { Rng } from '../random'
 import type { Series } from '../types'
-import { blurAxis, blurWrap, periodicNoise, resampleWrap, sampleWrap, sandBed } from '../dunes/field'
+import { blurAxis, blurWrap, latticeNoise, periodicNoise, resampleWrap, sampleWrap, sandBed } from '../dunes/field'
+import { castBy, dunePatches, owners } from '../dunes/patchwork'
 import { werner } from '../dunes/werner'
 import { int, range, stream, weighted } from '../random'
 
@@ -65,7 +69,7 @@ const PAL: Record<Features['Palette'], Palette> = {
   Namib: { sand: ['#232a4a', '#7e3a35', '#c95a33', '#f08a4e', '#ffc596'], floor: ['#5e4038', '#c99a7c'], sky: ['#2b62a0', '#f0c9a2'], haze: '#e9b892', hazeFar: 2.6 },
   Gypsum: { sand: ['#5d6286', '#9da0bd', '#d3d2da', '#f1eee9', '#ffffff'], floor: ['#c9bfae', '#f6f1e8'], sky: ['#5f97d4', '#e7eef4'], haze: '#dfe6ee', hazeFar: 2.6 },
   Dusk: { sand: ['#2f2447', '#6b4466', '#b46a7b', '#eba08f', '#ffd3b3'], floor: ['#4a3550', '#b88a90'], sky: ['#34336a', '#f4ad94'], haze: '#d99a95', hazeFar: 2.6 },
-  Mars: { sand: ['#0d0a0b', '#2a211e', '#4c3d35', '#77645a', '#ad9784'], floor: ['#4a2a20', '#a8674a'], sky: ['#a87a5a', '#e2bf98'], haze: '#c99c78', hazeFar: 4.5 },
+  Mars: { sand: ['#0a0708', '#2b1f1b', '#56433a', '#917866', '#d8bfa3'], floor: ['#3a1d15', '#bb7450'], sky: ['#9c6e50', '#e6c39c'], haze: '#d2a37c', hazeFar: 1.6 },
   Nocturne: { sand: ['#05070e', '#141b2c', '#2c3854', '#6a7c9e', '#c4d2e6'], floor: ['#0b0e16', '#323a4e'], sky: ['#03050a', '#1c2a44'], haze: '#18233a', hazeFar: 3.5 },
 }
 
@@ -104,6 +108,15 @@ const SLIP_LO = 0.22
 const REPOSE = 0.62
 /** Ripple wavelength in cells. */
 const RIPPLE = 1.1
+/** Vertical exaggeration of the low-angle view: dunes seen edge-on need it to stand out. */
+const LIFT = 1.5
+/** Size of the fine grain drawn close up in the low-angle view, in cells. */
+const GRAIN = 0.25
+/** Patchwork of the aerial view: copies of the torus, and the size of the patches each one holds, in cells. */
+const COPIES = 4
+const PATCH_SIZE = 40
+/** Dunes linked by a neck lower than this share of the smaller summit are told apart (laxer for dunes that wrap). */
+const NECK = [0.5, 0.7, 0.85, 0.95] as const
 
 function rgb(hex: string): RGB {
   const v = Number.parseInt(hex.slice(1), 16)
@@ -148,8 +161,12 @@ interface Field {
   gh: number
   /** Surface height in cell widths. */
   z: Float32Array
+  /** The same without the swells of the floor: the sand alone. */
+  sand: Float32Array
   /** Sand cover, 0 (bare floor) to 1. */
   cover: Float32Array
+  /** Where the model built slip faces (steps at the angle of repose), 0 to 1. */
+  slip: Float32Array
   /** Main wind direction (unit vector): the simulation frame blows towards +x. */
   wx: number
   wy: number
@@ -164,16 +181,51 @@ function buildField(hash: string, f: Features): Field {
     raw[c] = hs[c] * SLAB
   // Lines of cells along the wind only meet through avalanches, so crests
   // jitter from one line to the next: smooth twice more across the wind.
-  let z = blurWrap(blurWrap(raw, N, N), N, N)
+  // A third pass irons out the one-slab steps of the stoss slopes, which
+  // would otherwise show as terraces under a low sun.
+  let z = blurWrap(blurWrap(blurWrap(raw, N, N), N, N), N, N)
   for (let i = 0; i < 2; i++)
     z = blurAxis(z, N, N, 1)
+  // Slip faces are where avalanching left steps at the angle of repose
+  // (two slabs between neighbours); stoss slopes climb one slab at a time.
+  // Only there are faces rebuilt steep when shading.
+  const step = new Float32Array(cells)
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const c = y * N + x
+      const v = hs[c]
+      const d = Math.max(
+        Math.abs(v - hs[y * N + (x + 1) % N]),
+        Math.abs(v - hs[((y + 1) % N) * N + x]),
+      )
+      if (d >= 2)
+        step[c] = 1
+    }
+  }
+  const sb = blurWrap(blurWrap(step, N, N), N, N)
+  const slip = new Float32Array(cells)
+  for (let c = 0; c < cells; c++)
+    slip[c] = smooth(0.12, 0.35, sb[c])
   // A slab or two is a passing streak over the floor; a dune starts at
   // about three slabs.
   const zb = blurWrap(z, N, N)
   const cover = new Float32Array(cells)
   for (let c = 0; c < cells; c++)
     cover[c] = smooth(0.45, 1.05, zb[c])
-  return { gw: N, gh: N, z, cover, wx: 1, wy: 0 }
+  // the bare floor is not a table: low swells and hollows, a fraction of a
+  // cell high, that a low sun picks out
+  const sand = z.slice()
+  const fr = stream(hash, 'floor')
+  const big = periodicNoise(fr, 6, 6)
+  const fine = periodicNoise(fr, 16, 16)
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const c = y * N + x
+      const n = 0.7 * big(x / N * 6, y / N * 6) + 0.3 * fine(x / N * 16, y / N * 16) - 0.5
+      z[c] += 0.7 * n * (1 - cover[c])
+    }
+  }
+  return { gw: N, gh: N, z, sand, cover, slip, wx: 1, wy: 0 }
 }
 
 /** Fraction of each cell hidden from the sun by the terrain upwind of the light. */
@@ -219,11 +271,29 @@ interface Light {
 }
 
 /** Shades a raster of rw x rh samples covering the field at `ppc` samples per cell. */
-function shade(fd: Field, rw: number, rh: number, ppc: number, pal: Palette, light: Light, shadow: Float32Array, rr: Rng, contrast: number) {
+interface Look {
+  /** Tone contrast around mid-grey. */
+  contrast: number
+  /** Share of the slope that tilts the floor's shading. */
+  floorTilt: number
+  /** Relief of the ripples in the texture. */
+  rippleGain: number
+  /** Light from the sky that lifts the deepest shade, 0 to 1. */
+  sky: number
+}
+
+const AERIAL_LOOK: Look = { contrast: 1, floorTilt: 0.25, rippleGain: 1, sky: 0 }
+// seen at a low angle, slopes foreshorten: more contrast keeps them legible,
+// and the sky lights the shaded faces a little; ripples are redrawn crisply
+const OBLIQUE_LOOK: Look = { contrast: 1.3, floorTilt: 0.6, rippleGain: 0.35, sky: 0.06 }
+
+function shade(fd: Field, rw: number, rh: number, ppc: number, pal: Palette, light: Light, shadow: Float32Array, rr: Rng, look: Look) {
+  const { contrast, floorTilt, sky } = look
   const { gw, gh } = fd
   const Z = resampleWrap(fd.z, gw, gh, rw, rh)
   const C = resampleWrap(fd.cover, gw, gh, rw, rh)
   const SH = resampleWrap(shadow, gw, gh, rw, rh)
+  const SL = resampleWrap(fd.slip, gw, gh, rw, rh)
   // ripple field: crests across the main wind, bent by a wrapped noise and
   // gathered into patches; both are sampled on the grid, then resampled
   const wpx = Math.max(2, Math.round(gw / 5))
@@ -253,6 +323,8 @@ function shade(fd: Field, rw: number, rh: number, ppc: number, pal: Palette, lig
   const GRIT = resampleWrap(fG, gw, gh, rw, rh)
   // ripples finer than about three samples would alias: fade them out
   const rippleFade = smooth(2.2, 4.5, RIPPLE * ppc)
+  // a grazing sun turns every ripple into a black stripe: flatten them
+  const rippleAmp = 0.08 * look.rippleGain * Math.min(1, Math.max(0.35, light.sz * 2.4))
   const sand = pal.sand.map(rgb)
   const floor = pal.floor.map(rgb)
   const { sx, sy, sz } = light
@@ -292,9 +364,13 @@ function shade(fd: Field, rw: number, rh: number, ppc: number, pal: Palette, lig
       // repose, facing down the local slope: a crisp brink where the crest
       // is convex, a softer toe where the slope meets the floor.
       const curv = (zl + zr + zu + zd - 4 * z0) * ppc * ppc
-      const lf = curv < 0
-        ? smooth(SLIP_LO, SLIP_LO + 0.025, slope)
-        : smooth(SLIP_LO - 0.04, SLIP_LO + 0.06, slope)
+      let lf = 0
+      if (SL[o] > 0.02) {
+        // blend the two by curvature rather than switch: no stair-steps
+        const crisp = smooth(SLIP_LO, SLIP_LO + 0.025, slope)
+        const soft = smooth(SLIP_LO - 0.04, SLIP_LO + 0.06, slope)
+        lf = Math.min(1, SL[o]) * (soft + (crisp - soft) * smooth(0.05, -0.05, curv))
+      }
       if (lf > 0) {
         const k = lf * (REPOSE / Math.max(1e-6, slope) - 1)
         hx += hx * k
@@ -306,7 +382,7 @@ function shade(fd: Field, rw: number, rh: number, ppc: number, pal: Palette, lig
       rip[o] = mask
       if (mask > 0.01) {
         const ph = twoPi * ((u * fd.wx + v * fd.wy) / RIPPLE + WARP[o])
-        const d = 0.08 * mask * (Math.cos(ph) + 0.3 * Math.cos(2 * ph))
+        const d = rippleAmp * mask * (Math.cos(ph) + 0.3 * Math.cos(2 * ph))
         hx += d * fd.wx
         hy += d * fd.wy
       }
@@ -314,12 +390,13 @@ function shade(fd: Field, rw: number, rh: number, ppc: number, pal: Palette, lig
       let t = L >= sz ? 0.62 + 0.38 * (L - sz) / (1 - sz) : 0.62 * Math.max(0, L) / sz
       const shd = Math.min(1, Math.max(0, SH[o]))
       t *= 1 - 0.55 * shd
+      t = sky + (1 - sky) * t
       t = 0.5 + (t - 0.5) * contrast
       tone(t * 0.92 + 0.04, sand as RGB[], col)
       if (cov < 1) {
         // the floor: flat gravel or crust, in fine grain over broad tones
-        const fx = hx * 0.25
-        const fy = hy * 0.25
+        const fx = hx * floorTilt
+        const fy = hy * floorTilt
         const Lf = (-fx * sx - fy * sy + sz) / Math.sqrt(fx * fx + fy * fy + 1)
         let ft = Lf >= sz ? 0.62 + 0.38 * (Lf - sz) / (1 - sz) : 0.62 * Math.max(0, Lf) / sz
         ft *= (1 - 0.55 * shd) * (0.9 + 0.2 * GRIT[o]) * (0.92 + 0.16 * grain(u * 2.5, v * 2.5))
@@ -397,7 +474,7 @@ function renderAerial(g: CanvasRenderingContext2D, W: number, H: number, hash: s
   const shadow = castShadows(fd, lit.lx, lit.ly, lit.tanAlt)
   const tex = Math.min(12, Math.max(3, Math.ceil(1.05 / cpp)))
   const T = N * tex
-  const { rgba: trgb } = shade(fd, T, T, tex, pal, lit.light, shadow, stream(hash, 'ripples'), 1)
+  const { rgba: trgb, Z: tz } = shade(fd, T, T, tex, pal, lit.light, shadow, stream(hash, 'ripples'), AERIAL_LOOK)
 
   // warp offsets (cells), separable: one sine per screen axis and world axis
   const two = Math.PI * 2
@@ -415,37 +492,204 @@ function renderAerial(g: CanvasRenderingContext2D, W: number, H: number, hash: s
   }
   const ca = Math.cos(angle) * cpp
   const sa = Math.sin(angle) * cpp
-  const out = new Uint8ClampedArray(rw * rh * 4)
+  // world position (cells, unwrapped) of raster point (p, q): a row term
+  // plus a column term
+  const rowWX = new Float32Array(rh)
+  const rowWY = new Float32Array(rh)
+  const colWX = new Float32Array(rw)
+  const colWY = new Float32Array(rw)
   for (let q = 0; q < rh; q++) {
-    const dy = q + 0.5 - rh / 2
+    rowWX[q] = cx - sa * (q + 0.5 - rh / 2) + rowX[q]
+    rowWY[q] = cy + ca * (q + 0.5 - rh / 2) + rowY[q]
+  }
+  for (let p = 0; p < rw; p++) {
+    colWX[p] = ca * (p + 0.5 - rw / 2) + colX[p]
+    colWY[p] = sa * (p + 0.5 - rw / 2) + colY[p]
+  }
+  const worldX = (p: number, q: number) => rowWX[q] + colWX[p]
+  const worldY = (p: number, q: number) => rowWY[q] + colWY[p]
+
+  // Patchwork (../dunes/patchwork.ts): copies of the torus, shifted by
+  // random fractions of a period, keep or drop whole dunes so the field
+  // never repeats, however wide the canvas.
+  // sand, and the shadows it casts on the floor, one cell wider
+  const sandMask = new Uint8Array(N * N)
+  const shadeMask = new Uint8Array(N * N)
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const c = ((y + dy + N) % N) * N + (x + dx + N) % N
+          if (fd.cover[c] > 0.03)
+            sandMask[y * N + x] = 1
+          if (shadow[c] > 0.03)
+            shadeMask[y * N + x] = 1
+        }
+      }
+    }
+  }
+  const pr = stream(hash, 'patch')
+  const shift = Array.from({ length: COPIES }, (_, k) => k === 0 ? [0, 0] as const : [pr() * N, pr() * N] as const)
+  const noise = Array.from({ length: COPIES }, () => latticeNoise(pr))
+  // the first copy holds the middle of the canvas: a square crop shows the
+  // simulated field as it grew, and wider ones gain new dunes on the sides
+  const base = noise[0]
+  const span = periods * N
+  noise[0] = (x, y) => base(x, y) + 2 * (1 - smooth(0.35, 0.55, Math.hypot(x * PATCH_SIZE - cx, y * PATCH_SIZE - cy) / span))
+  // world box seen by the canvas, with the warp and one cell to spare
+  let bx0 = Infinity
+  let by0 = Infinity
+  let bx1 = -Infinity
+  let by1 = -Infinity
+  for (const [p, q] of [[0, 0], [rw - 1, 0], [0, rh - 1], [rw - 1, rh - 1]]) {
+    bx0 = Math.min(bx0, worldX(p, q))
+    bx1 = Math.max(bx1, worldX(p, q))
+    by0 = Math.min(by0, worldY(p, q))
+    by1 = Math.max(by1, worldY(p, q))
+  }
+  const margin = warp.reduce((a, w) => a + w.amp, 0) + 2
+  const ox = Math.floor(bx0 - margin)
+  const oy = Math.floor(by0 - margin)
+  const ow = Math.ceil(bx1 + margin) - ox
+  const oh = Math.ceil(by1 + margin) - oy
+  // A sand sea or ridges running out of the period cannot be split into
+  // dunes: those fields stay periodic, as transverse fields nearly are.
+  const dunes = dunePatches(sandMask, fd.sand, N, NECK)
+  castBy(dunes, sandMask, shadeMask, N, lit.lx, lit.ly)
+  const copies = dunes.wrapShare > 0.3 ? 1 : COPIES
+  const { own, alt } = owners(dunes, fd.sand, N, shift.slice(0, copies), noise.slice(0, copies), PATCH_SIZE, ox, oy, ow, oh)
+
+  const out = new Uint8ClampedArray(rw * rh * 4)
+  const acc = new Float32Array(3)
+  // adds copy k's colour at world (wx, wy), with weight w, to acc
+  const add = (k: number, wx: number, wy: number, w: number) => {
+    const x = (wx + shift[k][0]) * tex - 0.5
+    const y = (wy + shift[k][1]) * tex - 0.5
+    const xf = Math.floor(x)
+    const yf = Math.floor(y)
+    const tx = x - xf
+    const ty = y - yf
+    let x0 = xf % T
+    if (x0 < 0)
+      x0 += T
+    let y0 = yf % T
+    if (y0 < 0)
+      y0 += T
+    const x1 = x0 + 1 === T ? 0 : x0 + 1
+    const y1 = y0 + 1 === T ? 0 : y0 + 1
+    const i00 = (y0 * T + x0) * 4
+    const i10 = (y0 * T + x1) * 4
+    const i01 = (y1 * T + x0) * 4
+    const i11 = (y1 * T + x1) * 4
+    const w00 = (1 - tx) * (1 - ty) * w
+    const w10 = tx * (1 - ty) * w
+    const w01 = (1 - tx) * ty * w
+    const w11 = tx * ty * w
+    acc[0] += trgb[i00] * w00 + trgb[i10] * w10 + trgb[i01] * w01 + trgb[i11] * w11
+    acc[1] += trgb[i00 + 1] * w00 + trgb[i10 + 1] * w10 + trgb[i01 + 1] * w01 + trgb[i11 + 1] * w11
+    acc[2] += trgb[i00 + 2] * w00 + trgb[i10 + 2] * w10 + trgb[i01 + 2] * w01 + trgb[i11 + 2] * w11
+  }
+  // sand height of copy k at world (wx, wy)
+  const heightAt = (k: number, wx: number, wy: number) => {
+    const x = (wx + shift[k][0]) * tex - 0.5
+    const y = (wy + shift[k][1]) * tex - 0.5
+    const xf = Math.floor(x)
+    const yf = Math.floor(y)
+    const tx = x - xf
+    const ty = y - yf
+    let x0 = xf % T
+    if (x0 < 0)
+      x0 += T
+    let y0 = yf % T
+    if (y0 < 0)
+      y0 += T
+    const x1 = x0 + 1 === T ? 0 : x0 + 1
+    const y1 = y0 + 1 === T ? 0 : y0 + 1
+    const a0 = tz[y0 * T + x0] + (tz[y0 * T + x1] - tz[y0 * T + x0]) * tx
+    const a1 = tz[y1 * T + x0] + (tz[y1 * T + x1] - tz[y1 * T + x0]) * tx
+    return a0 + (a1 - a0) * ty
+  }
+  const ks = new Int32Array(8)
+  const kw = new Float32Array(8)
+  for (let q = 0; q < rh; q++) {
+    const rx = rowWX[q]
+    const ry = rowWY[q]
     for (let p = 0; p < rw; p++) {
-      const dx = p + 0.5 - rw / 2
-      const x = (cx + ca * dx - sa * dy + rowX[q] + colX[p]) * tex - 0.5
-      const y = (cy + sa * dx + ca * dy + rowY[q] + colY[p]) * tex - 0.5
-      const xf = Math.floor(x)
-      const yf = Math.floor(y)
-      const tx = x - xf
-      const ty = y - yf
-      let x0 = xf % T
-      if (x0 < 0)
-        x0 += T
-      let y0 = yf % T
-      if (y0 < 0)
-        y0 += T
-      const x1 = x0 + 1 === T ? 0 : x0 + 1
-      const y1 = y0 + 1 === T ? 0 : y0 + 1
-      const i00 = (y0 * T + x0) * 4
-      const i10 = (y0 * T + x1) * 4
-      const i01 = (y1 * T + x0) * 4
-      const i11 = (y1 * T + x1) * 4
-      const w00 = (1 - tx) * (1 - ty)
-      const w10 = tx * (1 - ty)
-      const w01 = (1 - tx) * ty
-      const w11 = tx * ty
+      const wx = rx + colWX[p]
+      const wy = ry + colWY[p]
+      // the four world cells around the point: one copy, or a soft seam
+      const gx = wx - ox - 0.5
+      const gy = wy - oy - 0.5
+      const i = Math.floor(gx)
+      const j = Math.floor(gy)
+      const fx = gx - i
+      const fy = gy - j
+      const g0 = j * ow + i
+      const a = own[g0]
+      const b = own[g0 + 1]
+      const c = own[g0 + ow]
+      const d = own[g0 + ow + 1]
+      acc[0] = 0
+      acc[1] = 0
+      acc[2] = 0
+      const anyAlt = alt[g0] !== 255 || alt[g0 + 1] !== 255 || alt[g0 + ow] !== 255 || alt[g0 + ow + 1] !== 255
+      if (anyAlt) {
+        // kept dunes of two copies overlap: the taller sand shows
+        let m = 0
+        for (const k of [a, b, c, d, alt[g0], alt[g0 + 1], alt[g0 + ow], alt[g0 + ow + 1]]) {
+          if (k !== 255 && !ks.subarray(0, m).includes(k))
+            ks[m++] = k
+        }
+        let k1 = ks[0]
+        let h1 = heightAt(k1, wx, wy)
+        let k2 = -1
+        let h2 = -Infinity
+        for (let e = 1; e < m; e++) {
+          const h = heightAt(ks[e], wx, wy)
+          if (h > h1) {
+            k2 = k1
+            h2 = h1
+            k1 = ks[e]
+            h1 = h
+          }
+          else if (h > h2) {
+            k2 = ks[e]
+            h2 = h
+          }
+        }
+        const w1 = k2 < 0 ? 1 : 0.5 + 0.5 * smooth(0, 0.12, h1 - h2)
+        add(k1, wx, wy, w1)
+        if (w1 < 1)
+          add(k2, wx, wy, 1 - w1)
+      }
+      else if (a === b && a === c && a === d) {
+        add(a, wx, wy, 1)
+      }
+      else {
+        let m = 0
+        const put = (k: number, w: number) => {
+          for (let e = 0; e < m; e++) {
+            if (ks[e] === k) {
+              kw[e] += w
+              return
+            }
+          }
+          ks[m] = k
+          kw[m++] = w
+        }
+        put(a, (1 - fx) * (1 - fy))
+        put(b, fx * (1 - fy))
+        put(c, (1 - fx) * fy)
+        put(d, fx * fy)
+        for (let e = 0; e < m; e++) {
+          if (kw[e] > 0.001)
+            add(ks[e], wx, wy, kw[e])
+        }
+      }
       const o = (q * rw + p) * 4
-      out[o] = trgb[i00] * w00 + trgb[i10] * w10 + trgb[i01] * w01 + trgb[i11] * w11
-      out[o + 1] = trgb[i00 + 1] * w00 + trgb[i10 + 1] * w10 + trgb[i01 + 1] * w01 + trgb[i11 + 1] * w11
-      out[o + 2] = trgb[i00 + 2] * w00 + trgb[i10 + 2] * w10 + trgb[i01 + 2] * w01 + trgb[i11 + 2] * w11
+      out[o] = acc[0]
+      out[o + 1] = acc[1]
+      out[o + 2] = acc[2]
       out[o + 3] = 255
     }
   }
@@ -464,14 +708,14 @@ function renderOblique(g: CanvasRenderingContext2D, W: number, H: number, hash: 
   const rh = Math.max(1, Math.round(H * k))
   const rs = Math.min(rw, rh)
   // texture samples per cell: enough for the foreground at this size
-  const TEX = Math.min(12, Math.max(4, Math.round(rs / 90)))
+  const TEX = Math.min(12, Math.max(5, Math.round(rs / 90)))
   const T = N * TEX
-  // seen at a low angle, slopes foreshorten: more contrast keeps them legible
-  const tex = shade(fd, T, T, TEX, pal, lit.light, shadow, stream(hash, 'ripples'), 1.3)
+  const tex = shade(fd, T, T, TEX, pal, lit.light, shadow, stream(hash, 'ripples'), OBLIQUE_LOOK)
   const tz = tex.Z
   const trgb = tex.rgba
   const trip = tex.rip
   const twarp = tex.warp
+  const grainN = periodicNoise(stream(hash, 'grain'), Math.round(N / GRAIN), Math.round(N / GRAIN))
   // close up, ripples are redrawn crisply from their phase rather than
   // magnified from the texture: brightness follows the light along the wind
   const ripLight = -(lit.light.sx * fd.wx + lit.light.sy * fd.wy) / Math.max(0.2, Math.hypot(lit.light.sx, lit.light.sy))
@@ -479,34 +723,86 @@ function renderOblique(g: CanvasRenderingContext2D, W: number, H: number, hash: 
   for (let c = 0; c < fd.z.length; c++)
     zmax = Math.max(zmax, fd.z[c])
 
-  // camera: looking across, along or against the wind, a little above the crests
-  const look = Math.atan2(fd.wy, fd.wx) + [0, Math.PI, Math.PI / 2, -Math.PI / 2][int(vr, 0, 3)] + range(vr, -0.45, 0.45)
-  const camX = vr() * N
-  const camY = vr() * N
-  const camZ = zmax + range(vr, 4, 8)
-  const horizon = range(vr, 0.22, 0.32)
-
-  const focal = 1.05 * rs
-  const hy = horizon * rh
+  // Camera: looking across, along or against the wind, aimed at one of the
+  // tallest dunes a few dune lengths ahead and just above the crests, so a
+  // field with little sand still has a dune to look at.
+  // (straight into the sun, every slip face is a dark wall: only obliquely)
+  const look = Math.atan2(fd.wy, fd.wx) + [0, Math.PI * 0.7, Math.PI / 2, -Math.PI / 2][int(vr, 0, 3)] + range(vr, -0.45, 0.45)
   const fwx = Math.cos(look)
   const fwy = Math.sin(look)
   const rtx = -fwy
   const rty = fwx
+  const tall: number[] = []
+  for (let c = 0; c < fd.z.length; c++) {
+    if (fd.z[c] >= 0.75 * zmax)
+      tall.push(c)
+  }
+  // Several placements are drawn; the one with the clearest view of its
+  // dune (nothing in between, low ground in front of the lens) is kept.
+  const lift = range(vr, 1.25, 1.7)
+  const camZ = zmax * LIFT * lift
+  let camX = 0
+  let camY = 0
+  let best = Infinity
+  for (let k = 0; k < 12; k++) {
+    const target = tall[Math.min(tall.length - 1, Math.floor(vr() * tall.length))]
+    const dist = Math.max(36, range(vr, 5, 7.5) * zmax * LIFT)
+    const side = range(vr, -0.18, 0.18) * dist
+    const tx = target % N + 0.5
+    const ty = Math.floor(target / N) + 0.5
+    const x0 = tx - fwx * dist - rtx * side
+    const y0 = ty - fwy * dist - rty * side
+    const top = fd.z[target] * LIFT
+    let block = 0
+    let near = 0
+    for (let i = 1; i < 24; i++) {
+      const t = i / 24
+      const sight = camZ + (top - camZ) * t
+      const h = sampleWrap(fd.z, N, N, x0 + (tx - x0) * t, y0 + (ty - y0) * t) * LIFT
+      block = Math.max(block, h - sight)
+      // close to the lens the field is too coarse to look sharp: keep it low
+      if (t < 0.6)
+        near = Math.max(near, h)
+    }
+    const score = block + near
+    if (score < best) {
+      best = score
+      camX = x0
+      camY = y0
+    }
+  }
+  const horizon = range(vr, 0.3, 0.4)
+
+  const focal = 1.05 * rs
+  // the horizon keeps its height from the centre in short sides: a tall
+  // canvas gains sky and far dunes rather than a blurred foreground
+  const hy = rh / 2 - (0.5 - horizon) * rs
 
   const out = new Uint8ClampedArray(rw * rh * 4)
   // sky
   const [top, bot] = pal.sky.map(rgb)
   const haze = rgb(pal.haze)
+  // a glow over the horizon on the side of the sun, fading with height
+  const sunAz = Math.atan2(lit.ly, lit.lx)
+  const glowCol = haze.map(v => Math.min(255, v * 1.12 + 14))
+  const glowCols = new Float32Array(rw)
+  for (let p = 0; p < rw; p++) {
+    let d = look + Math.atan((p + 0.5 - rw / 2) / focal) - sunAz
+    d = Math.atan2(Math.sin(d), Math.cos(d))
+    glowCols[p] = 0.45 * Math.exp(-((d / 0.8) ** 2))
+  }
   for (let q = 0; q < rh; q++) {
     const t = Math.min(1, Math.max(0, q / Math.max(1, hy))) ** 1.6
     const r = top[0] + (bot[0] - top[0]) * t
     const gg = top[1] + (bot[1] - top[1]) * t
     const b = top[2] + (bot[2] - top[2]) * t
+    const rise = Math.exp(-Math.max(0, hy - q) / (0.22 * rs))
     for (let p = 0; p < rw; p++) {
       const o = (q * rw + p) * 4
-      out[o] = r
-      out[o + 1] = gg
-      out[o + 2] = b
+      const w = glowCols[p] * rise
+      out[o] = r + (glowCol[0] - r) * w
+      out[o + 1] = gg + (glowCol[1] - gg) * w
+      out[o + 2] = b + (glowCol[2] - b) * w
       out[o + 3] = 255
     }
   }
@@ -553,7 +849,7 @@ function renderOblique(g: CanvasRenderingContext2D, W: number, H: number, hash: 
       const w10 = tx * (1 - ty)
       const w01 = (1 - tx) * ty
       const w11 = tx * ty
-      const ht = tz[i00] * w00 + tz[i10] * w10 + tz[i01] * w01 + tz[i11] * w11
+      const ht = (tz[i00] * w00 + tz[i10] * w10 + tz[i01] * w01 + tz[i11] * w11) * LIFT
       const sy = hy + (camZ - ht) * scale
       // whole rows only, so no gap opens between two slices
       const from = Math.max(0, Math.floor(sy))
@@ -563,15 +859,20 @@ function renderOblique(g: CanvasRenderingContext2D, W: number, H: number, hash: 
       const gg = trgb[i00 * 4 + 1] * w00 + trgb[i10 * 4 + 1] * w10 + trgb[i01 * 4 + 1] * w01 + trgb[i11 * 4 + 1] * w11
       const b = trgb[i00 * 4 + 2] * w00 + trgb[i10 * 4 + 2] * w10 + trgb[i01 * 4 + 2] * w01 + trgb[i11 * 4 + 2] * w11
       let mod = 1
+      const wxw = cx + rtx * off
+      const wyw = cy + rty * off
+      // close up, a fine grain keeps the ground from looking like a blur
+      const gpx = GRAIN * scale
+      if (gpx > 1.5 && GRAIN > 2 * dz)
+        mod += 0.2 * smooth(1.5, 4, gpx) * smooth(2, 4, GRAIN / dz) * (grainN(wxw / GRAIN, wyw / GRAIN) - 0.5)
       const rpx = RIPPLE * scale
-      if (rpx > 3) {
+      // a ripple must span several pixels across and several slices deep
+      if (rpx > 3 && RIPPLE > 3 * dz) {
         const rm = trip[i00] * w00 + trip[i10] * w10 + trip[i01] * w01 + trip[i11] * w11
         if (rm > 0.02) {
           const wp = twarp[i00] * w00 + twarp[i10] * w10 + twarp[i01] * w01 + twarp[i11] * w11
-          const wxw = cx + rtx * off
-          const wyw = cy + rty * off
           const ph = 2 * Math.PI * ((wxw * fd.wx + wyw * fd.wy) / RIPPLE + wp)
-          mod = 1 + 0.16 * rm * ripLight * smooth(3, 7, rpx) * Math.sin(ph)
+          mod += 0.16 * rm * ripLight * smooth(3, 7, rpx) * (1 - smooth(14, 30, rpx)) * smooth(3, 6, RIPPLE / dz) * Math.sin(ph)
         }
       }
       const cr = r * mod + (haze[0] - r * mod) * fog

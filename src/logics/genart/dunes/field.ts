@@ -202,3 +202,30 @@ export function blurAxis(src: Float32Array, gw: number, gh: number, dir: 0 | 1) 
   }
   return out
 }
+
+/**
+ * Value noise on an unbounded integer lattice (no period), smoothstep
+ * blended, output in [0, 1]. Lattice values come from an integer hash of
+ * the corner and a seed drawn from `r`: used where a pattern must never
+ * repeat, such as the patchwork that hides the period of the torus.
+ */
+export function latticeNoise(r: Rng): Noise2 {
+  const seed = (r() * 4294967296) >>> 0
+  const at = (i: number, j: number) => {
+    let h = Math.imul(i, 0x27D4EB2D) ^ Math.imul(j, 0x165667B1) ^ seed
+    h = Math.imul(h ^ (h >>> 15), 0x85EBCA6B)
+    h = Math.imul(h ^ (h >>> 13), 0xC2B2AE35)
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296
+  }
+  return (x: number, y: number) => {
+    const xf = Math.floor(x)
+    const yf = Math.floor(y)
+    const tx = x - xf
+    const ty = y - yf
+    const u = tx * tx * (3 - 2 * tx)
+    const w = ty * ty * (3 - 2 * ty)
+    const a = at(xf, yf) + u * (at(xf + 1, yf) - at(xf, yf))
+    const b = at(xf, yf + 1) + u * (at(xf + 1, yf + 1) - at(xf, yf + 1))
+    return a + w * (b - a)
+  }
+}
