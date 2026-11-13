@@ -343,7 +343,16 @@ function makeScene(f: Features, pal: Palette, r: Rng, aa: number): Scene {
     return { albedo, depth, window: null }
   }
   if (f.Floor === 'Pebbles') {
-    const albedo = pebbles({ seed, size: size * 1.3, stones: pal.stones.map(hex), grit: hex(pal.grit), aa })
+    // larger stones than the caustic cells, their colours drawn towards a
+    // darker, greyer mean and the grit towards the stones: two scales and
+    // two contrasts, so the stones read as ground and the light as figure
+    const stones = pal.stones.map(hex)
+    const mean = [0, 1, 2].map(ch => stones.reduce((a, c) => a + c[ch], 0) / stones.length)
+    const grey = (mean[0] + mean[1] + mean[2]) / 3
+    const calm = (c: Rgb): Rgb => c.map((v, ch) => 0.8 * (v + (0.6 * mean[ch] + 0.4 * grey - v) * 0.3)) as unknown as Rgb
+    const g = hex(pal.grit)
+    const grit = g.map((v, ch) => v + (0.8 * mean[ch] - v) * 0.2) as unknown as Rgb
+    const albedo = pebbles({ seed, size: size * 1.75, stones: stones.map(calm), grit, aa })
     const w = waves[0]
     const depth: Depth = (x, y) => 1 + 0.18 * Math.sin(w.k * (x * Math.cos(w.a) + y * Math.sin(w.a)) + w.p)
     return { albedo, depth, window: null }

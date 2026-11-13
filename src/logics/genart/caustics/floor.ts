@@ -234,10 +234,12 @@ export function pebbles(o: PebbleOptions): Albedo {
       return
     }
     const stone = o.stones[COL[bc]]
-    const speck = 0.93 + 0.14 * noise(x * 180 + bc, y * 180)
-    // dark rim where the pebble meets the grit, lighter crown
-    const rim = smooth(edge / (o.size * 0.08 + o.aa))
-    const k = (0.55 + 0.45 * Math.min(1, best)) * (0.9 + 0.2 * HT[bc]) * speck
+    const speck = 0.96 + 0.08 * noise(x * 180 + bc, y * 180)
+    // a soft rim where the pebble meets the grit and a gently domed crown:
+    // seen through the water the stones stay calm, so the caustic lines
+    // carry the contrast
+    const rim = smooth(edge / (o.size * 0.12 + o.aa))
+    const k = (0.72 + 0.28 * Math.min(1, best)) * (0.94 + 0.12 * HT[bc]) * speck
     out[0] = o.grit[0] + (stone[0] * k - o.grit[0]) * rim
     out[1] = o.grit[1] + (stone[1] * k - o.grit[1]) * rim
     out[2] = o.grit[2] + (stone[2] * k - o.grit[2]) * rim
