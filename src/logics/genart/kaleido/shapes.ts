@@ -28,10 +28,16 @@ export interface Region {
   interior: (r: Rng) => Pt
   /** A point on a mirror edge, with the direction of that edge, turned so the domain lies on its left (direction + pi / 2 points inwards). */
   edge: (r: Rng) => readonly [Pt, number]
-  /** A corner of the domain: a centre of rotation. */
-  vertex: (r: Rng) => Pt
+  /** A corner of the domain (a centre of rotation), with the bisector of its angle, pointing inwards. */
+  vertex: (r: Rng) => readonly [Pt, number]
   /** Characteristic size of a large shape at this point. */
   scale: (p: Pt) => number
+  /**
+   * Angle step for straight-sided shapes inside the domain: lined up with
+   * the mirrors, their reflections stay regular instead of folding into
+   * ragged stair-steps.
+   */
+  snap: number
 }
 
 export type MotifWeights = ReadonlyArray<readonly [Kind, number]>
@@ -251,8 +257,19 @@ export function motif(r: Rng, region: Region, count: number, weights: MotifWeigh
       let p: Pt
       let rot: number
       if (where < 0.2) {
-        p = region.vertex(r)
-        rot = r() * TAU
+        // On a corner. Straight-sided shapes are lined up with the bisector,
+        // so their reflections close into a regular star; turned at random
+        // they would fold into ragged stair-steps around the corner.
+        const [q, bis] = region.vertex(r)
+        p = q
+        if (kind === 'quarter' || kind === 'arc')
+          rot = bis - (kind === 'quarter' ? p1 : p2) / 2
+        else if (kind === 'steps' || kind === 'bar')
+          rot = bis + pick(r, [0, Math.PI])
+        else if (kind === 'stripes')
+          rot = bis + pick(r, [0, Math.PI / 2])
+        else
+          rot = r() * TAU
       }
       else if (where < 0.58) {
         // On a mirror. Shapes with straight sides straddle it symmetrically
@@ -267,7 +284,10 @@ export function motif(r: Rng, region: Region, count: number, weights: MotifWeigh
           rot = pick(r, [dir - sweep / 2, half ? dir - sweep / 2 : dir + Math.PI / 2 - sweep / 2, r() * TAU])
         }
         else if (kind === 'steps' || kind === 'bar') {
-          rot = pick(r, [dir, dir + Math.PI, r() * TAU])
+          rot = pick(r, [dir, dir + Math.PI])
+        }
+        else if (kind === 'stripes') {
+          rot = dir + pick(r, [0, Math.PI / 2])
         }
         else {
           rot = dir + pick(r, [0, Math.PI / 2, -Math.PI / 2, Math.PI, r() * TAU])
@@ -276,6 +296,8 @@ export function motif(r: Rng, region: Region, count: number, weights: MotifWeigh
       else {
         p = region.interior(r)
         rot = r() * TAU
+        if (kind === 'steps' || kind === 'stripes' || kind === 'bar')
+          rot = Math.round(rot / region.snap) * region.snap
       }
       const [lo, hi] = TIER[tier]
       s = {

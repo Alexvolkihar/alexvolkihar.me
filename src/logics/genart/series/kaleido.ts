@@ -7,7 +7,7 @@
 // get their own order; a triangle or rectangle of mirrors tiles the whole
 // sheet with one of the four planar kaleidoscopes (*442, *632, *333, *2222).
 // Inks are flat with crisp edges; the print can carry a paper grain and a
-// slight misregistration of the colour layers.
+// visible misregistration of the colour layers (knock-out and overprint).
 //
 // Everything is a pure function of the hash, and every length is a fraction
 // of the canvas short side. A wider or taller canvas shows more of the same
@@ -89,13 +89,15 @@ const ORDER: ReadonlyArray<readonly [number, number]> = [[3, 7], [4, 12], [5, 14
 
 const TAU = Math.PI * 2
 const SQ3 = Math.sqrt(3)
+/** Bare paper under the dark grounds, shown where a misregistered shape is knocked out. */
+const PAPER = '#f4efe4'
 
 // ---------------------------------------------------------------------------
 // Regions: where shapes may sit in each kind of fundamental domain.
 // ---------------------------------------------------------------------------
 
 /** A polygon of mirrors (all edges mirrors), with a constant shape size. */
-function polygonRegion(poly: readonly Pt[], L: number): Region {
+function polygonRegion(poly: readonly Pt[], L: number, snap: number): Region {
   const n = poly.length
   const tri = (r: Rng, a: Pt, b: Pt, c: Pt): Pt => {
     let u = r()
@@ -118,8 +120,17 @@ function polygonRegion(poly: readonly Pt[], L: number): Region {
       const t = r()
       return [[p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])], Math.atan2(q[1] - p[1], q[0] - p[0])]
     },
-    vertex: r => poly[Math.floor(r() * n)],
+    vertex: (r) => {
+      const i = Math.floor(r() * n)
+      const v = poly[i]
+      const a = poly[(i + n - 1) % n]
+      const b = poly[(i + 1) % n]
+      const la = Math.hypot(a[0] - v[0], a[1] - v[1])
+      const lb = Math.hypot(b[0] - v[0], b[1] - v[1])
+      return [v, Math.atan2((a[1] - v[1]) / la + (b[1] - v[1]) / lb, (a[0] - v[0]) / la + (b[0] - v[0]) / lb)]
+    },
     scale: () => L,
+    snap,
   }
 }
 
@@ -144,10 +155,15 @@ function wedgeRegion(al: number, r0: number, r1: number, ring: boolean): Region 
     },
     vertex: (r) => {
       if (r0 === 0)
-        return [0, 0]
-      const rr = r() < 0.5 ? r0 : r1
+        return [[0, 0], al / 2]
+      const inner = r() < 0.5
+      const rr = inner ? r0 : r1
       const t = r() < 0.5 ? 0 : al
-      return [rr * Math.cos(t), rr * Math.sin(t)]
+      // a corner of the annular wedge: inwards along the radius and along the arc
+      const radial = inner ? t : t + Math.PI
+      const across = t === 0 ? Math.PI / 2 : al - Math.PI / 2
+      const bis = Math.atan2(Math.sin(radial) + Math.sin(across), Math.cos(radial) + Math.cos(across))
+      return [[rr * Math.cos(t), rr * Math.sin(t)], bis]
     },
     scale: (p) => {
       const rr = Math.hypot(p[0], p[1])
@@ -155,6 +171,7 @@ function wedgeRegion(al: number, r0: number, r1: number, ring: boolean): Region 
         return Math.min((r1 - r0) * 1.15, Math.max(r0, rr) * al * 1.6)
       return Math.min(0.6, 0.26 + rr * al * 1.6)
     },
+    snap: al / 2,
   }
 }
 
@@ -163,8 +180,10 @@ function wedgeRegion(al: number, r0: number, r1: number, ring: boolean): Region 
 // ---------------------------------------------------------------------------
 
 interface Layer {
-  /** Clip of one copy of the domain, in domain units. */
+  /** Clip of one copy of the domain, in domain units, grown to overlap its neighbours. */
   clip: Path2D
+  /** The same, not grown: the clip of a misregistered ink (see drawLayer). */
+  inkClip: Path2D
   /** Domain units -> canvas pixels, one matrix per mirrored copy. */
   copies: Mat[]
   shapes: Shape[]
@@ -224,6 +243,87 @@ function wedgeFit(al: number, r0: number, R: number): Fit {
   }
 }
 
+/** Least share of a domain that the inks must cover (pale inks on a pale ground do not count). */
+const MIN_COVER = 0.5
+
+/**
+ * Keeps sparse pieces from looking thin: measures how much of the domain is
+ * covered, at the sample points, by an ink that stands off the ground; the
+ * first anchor takes the leading ink if it lacks one, then the shapes that
+ * count are enlarged until enough is covered. Should that not do, a disc of
+ * the leading ink is laid under everything on the main centre of rotation.
+ * No random draw: the piece keeps its layout, only grown.
+ */
+function densify(g: CanvasRenderingContext2D, shapes: Shape[], samples: readonly Pt[], inks: readonly string[], lg: number, centre: Pt, radius: number): Shape[] {
+  const visible = (s: Shape) => s.ink >= 0 && Math.abs(luma(inks[s.ink]) - lg) > 0.2
+  const cover = (list: Shape[]) => {
+    const paths = list.map(buildPath)
+    let n = 0
+    for (const [x, y] of samples) {
+      for (let i = list.length - 1; i >= 0; i--) {
+        if (g.isPointInPath(paths[i], x * 1000, y * 1000)) {
+          if (visible(list[i]))
+            n++
+          break
+        }
+      }
+    }
+    return n / Math.max(1, samples.length)
+  }
+  // tested at a thousand pixels to the unit: hit tests work on pixels
+  g.save()
+  g.setTransform(1000, 0, 0, 1000, 0, 0)
+  let out = shapes
+  if (cover(out) < MIN_COVER && !visible(out[0])) {
+    // the first anchor, if pale or cut out, takes the leading ink
+    out = [{ ...out[0], ink: 0 }, ...out.slice(1)]
+  }
+  // grow the shapes that count, never the pale ones that would hide them
+  for (let k = 0; k < 3 && cover(out) < MIN_COVER; k++)
+    out = out.map(s => (visible(s) ? { ...s, size: s.size * 1.18 } : s))
+  if (cover(out) < MIN_COVER)
+    out = [{ kind: 'disc', x: centre[0], y: centre[1], rot: 0, size: radius * 2, p1: 0, p2: 0, ink: 0 }, ...out]
+  g.restore()
+  return out
+}
+
+/**
+ * Ribbons for the rectangular kaleidoscope, whose plain grid of mirrors
+ * otherwise reads as rows: one or two bars laid along mirror edges, so their
+ * reflections run unbroken across the sheet as a plaid, sometimes doubled by
+ * a thin parallel line. They go just above the first anchor.
+ */
+function ribbons(r: Rng, poly: readonly Pt[], shapes: Shape[], nInks: number): Shape[] {
+  const out: Shape[] = []
+  const first = Math.floor(r() * 4)
+  const count = r() < 0.55 ? 2 : 1
+  for (let k = 0; k < count; k++) {
+    const i = (first + k) % 4
+    const p = poly[i]
+    const q = poly[(i + 1) % 4]
+    const len = Math.hypot(q[0] - p[0], q[1] - p[1])
+    const rot = Math.atan2(q[1] - p[1], q[0] - p[0])
+    const ux = Math.cos(rot)
+    const uy = Math.sin(rot)
+    const t = range(r, 0.022, 0.06)
+    const ink = 1 + Math.floor(r() * (nInks - 1))
+    const bar = (off: number, w: number, c: number): Shape => ({
+      kind: 'bar',
+      x: p[0] - ux * 0.02 - uy * off,
+      y: p[1] - uy * 0.02 + ux * off,
+      rot,
+      size: len + 0.04,
+      p1: w / (len + 0.04),
+      p2: 0,
+      ink: c,
+    })
+    out.push(bar(0, t, ink))
+    if (r() < 0.5)
+      out.push(bar(t * range(r, 1.1, 1.8), t * 0.3, (ink + 1) % nInks))
+  }
+  return [shapes[0], ...out, ...shapes.slice(1)]
+}
+
 function polyPath(poly: readonly Pt[]): Path2D {
   const P = new Path2D()
   P.moveTo(poly[0][0], poly[0][1])
@@ -237,40 +337,68 @@ function setMat(g: CanvasRenderingContext2D, M: Mat): void {
   g.setTransform(M[0], M[1], M[2], M[3], M[4], M[5])
 }
 
+/** How a misregistered print lays its inks. */
+interface Misprint {
+  /** Shift of each ink layer on the sheet, in pixels. */
+  offsets: readonly Pt[]
+  /** The paper left bare where a shape is knocked out of the inks below. */
+  paper: string
+}
+
 /**
  * Draws a layer: every shape in every copy, clipped to its domain. Shapes are
  * printed one at a time across all copies, as a screen print lays one colour
  * at a time: neighbouring copies overlap by a fraction of a pixel on their
- * mirror, and drawing copy by copy would let a lower shape of the next copy
- * bleed over an upper shape of the previous one along that line.
+ * mirror (enough to close the antialiased seam in a single fill), and drawing
+ * copy by copy would let a lower shape of the next copy bleed over an upper
+ * shape of the previous one along that line.
+ *
+ * Misregistered prints work like a stencil print with knock-outs: each shape
+ * first clears its place to bare paper where it should be, then its ink is
+ * multiplied onto the sheet where it actually lands, shifted with its whole
+ * layer. The paper shows as a sliver on one side, and the ink overprints
+ * whatever lies below on the other side, darker.
  */
-function drawLayer(g: CanvasRenderingContext2D, W: number, H: number, L: Layer, inks: readonly string[], offsets: readonly Pt[] | null): void {
+function drawLayer(g: CanvasRenderingContext2D, W: number, H: number, L: Layer, inks: readonly string[], mis: Misprint | null): void {
   for (let i = 0; i < L.shapes.length; i++) {
     const s = L.shapes[i]
-    g.fillStyle = s.ink < 0 ? L.cut : inks[s.ink]
-    // misregistered: each ink is shifted on the sheet, its clip included
-    const o = offsets && s.ink >= 0 ? offsets[s.ink] : null
-    for (const M of L.copies) {
-      // skip copies that land off the canvas (M includes the scale)
+    const colour = s.ink < 0 ? L.cut : inks[s.ink]
+    // the key ink (index 0) stays in register and prints as usual
+    const o = mis && s.ink > 0 ? mis.offsets[s.ink] : null
+    // copies that land on the canvas (M includes the scale)
+    const copies = L.copies.filter((M) => {
       const x = M[0] * s.x + M[2] * s.y + M[4]
       const y = M[1] * s.x + M[3] * s.y + M[5]
-      const rr = L.reach[i] * Math.hypot(M[0], M[1]) + 8
-      if (x + rr < 0 || y + rr < 0 || x - rr > W || y - rr > H)
-        continue
+      const rr = L.reach[i] * Math.hypot(M[0], M[1]) + 16
+      return x + rr >= 0 && y + rr >= 0 && x - rr <= W && y - rr <= H
+    })
+    const fill = (M: Mat, clip: Path2D) => {
       if (L.free[i]) {
-        setMat(g, o ? mul(translation(o[0], o[1]), M) : M)
+        setMat(g, M)
         g.fill(L.paths[i])
-        continue
+        return
       }
       g.save()
-      setMat(g, o ? mul(translation(o[0], o[1]), M) : M)
-      g.clip(L.clip)
-      // twice: where a shape crosses a mirror, the two clipped halves each
-      // cover the edge pixels only in part; a second pass closes the seam
-      g.fill(L.paths[i])
+      setMat(g, M)
+      g.clip(clip)
       g.fill(L.paths[i])
       g.restore()
     }
+    // the shape in place: its ink, or under misregistration the knock-out
+    g.fillStyle = o && mis ? mis.paper : colour
+    for (const M of copies)
+      fill(M, L.clip)
+    if (!o)
+      continue
+    // Then the ink, shifted with its layer and multiplied onto the sheet,
+    // once every copy is knocked out (a later knock-out would erase the
+    // ink of a neighbouring copy along the mirror). Its clip is not grown:
+    // multiplying twice where two copies overlap would draw a dark line.
+    g.globalCompositeOperation = 'multiply'
+    g.fillStyle = colour
+    for (const M of copies)
+      fill(mul(translation(o[0], o[1]), M), L.inkClip)
+    g.globalCompositeOperation = 'source-over'
   }
 }
 
@@ -332,19 +460,25 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
   // the dominant ink must stand off the ground: a chalk white on cream is
   // fine for details, not for the anchors
   const lg = luma(pal.ground)
-  const strong = inks.findIndex(c => Math.abs(luma(c) - lg) > 0.25)
+  const contrast = (c: string) => Math.abs(luma(c) - lg)
+  const strong = inks.findIndex(c => contrast(c) > 0.25)
   if (strong > 0) {
     const t = inks[0]
     inks[0] = inks[strong]
     inks[strong] = t
   }
+  else if (strong < 0) {
+    // none drawn: the palette's strongest ink takes the lead
+    inks[0] = pal.inks.reduce((a, c) => (contrast(c) > contrast(a) ? c : a))
+  }
   const inkWeights = [5, 3, 2.2, 1.6, 1.2].slice(0, nInks)
   const offsets: Pt[] = inks.map((_, i) => {
     const a = ir() * TAU
-    const d = i === 0 ? 0 : range(ir, 0.002, 0.005) * S
+    const d = i === 0 ? 0 : range(ir, 0.004, 0.0075) * S
     return [Math.cos(a) * d, Math.sin(a) * d]
   })
   const misreg = f.Print === 'Misregistered' ? offsets : null
+  const mis: Misprint | null = misreg && { offsets, paper: pal.dark ? PAPER : pal.ground }
 
   const lr = stream(hash, 'layout')
   const mr = stream(hash, 'motif')
@@ -355,15 +489,17 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
   const rings: { r: number, out: number, ground: string }[] = []
   let separator: string | null = null
 
-  // Clips are grown by a third of a pixel (see grow) and kept as tight as
+  // Clips are grown by part of a pixel (see grow) and kept as tight as
   // possible: the cost of a clip grows with its area on large canvases.
-  const e = 0.3 / S
-  const make = (clip: Path2D, fit: Fit, copies: Mat[], all: Shape[], cut: string): Layer => {
+  const E_FILL = 0.6 / S
+  const E_INK = 0
+  const make = (clipOf: (e: number) => Path2D, fit: Fit, copies: Mat[], all: Shape[], cut: string): Layer => {
     // shapes wholly outside the domain never show; wholly inside need no clip
     const fits = all.map(s => fit(s, extent(s)))
     const shapes = all.filter((_, i) => fits[i] >= 0)
     return {
-      clip,
+      clip: clipOf(E_FILL),
+      inkClip: clipOf(E_INK),
       copies,
       shapes,
       paths: shapes.map(buildPath),
@@ -373,13 +509,13 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
     }
   }
   /** The wedge of angle al out to radius R, its two mirrors pushed out by e. */
-  const wedgeClip = (al: number, R: number) => {
+  const wedgeClip = (al: number, R: number, e: number) => {
     // far corners placed so the far edge stays R away from the apex
     const F = R / Math.cos(al / 2)
     return polyPath(grow([[0, 0], [F, 0], [F * Math.cos(al), F * Math.sin(al)]], e))
   }
   /** The annular wedge of a ring, its radial mirrors pushed out by e. */
-  const ringClip = (al: number, r0: number, R: number) => {
+  const ringClip = (al: number, r0: number, R: number, e: number) => {
     const P = new Path2D()
     const x0 = Math.sqrt(r0 * r0 - e * e)
     const x1 = Math.sqrt(R * R - e * e)
@@ -405,14 +541,22 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
     const phase = -Math.PI / 2 + (chance(lr, 0.5) ? al : 0)
     const copies = rosetteCopies(n, phase).map(base)
     const count = Math.round(int(mr, cLo, cHi) * 2)
-    const shapes = motif(mr, wedgeRegion(al, 0, 0.74, false), count, weights, inkWeights)
+    const samples: Pt[] = []
+    for (let i = 0; i < 14; i++) {
+      for (let j = 0; j < 8; j++) {
+        const rr = 0.72 * Math.sqrt((i + 0.5) / 14)
+        const t = (al * (j + 0.5)) / 8
+        samples.push([rr * Math.cos(t), rr * Math.sin(t)])
+      }
+    }
+    const shapes = densify(g, motif(mr, wedgeRegion(al, 0, 0.74, false), count, weights, inkWeights), samples, inks, lg, [0, 0], 0.4)
     // further bands, only on canvases that reach them
     for (let k = 0; 0.74 + 0.3 * k < rmax; k++) {
       const br = stream(hash, `band-${k}`)
       const r0 = 0.74 + 0.3 * k
       shapes.push(...motif(br, wedgeRegion(al, r0, r0 + 0.3, false), int(br, cLo, cHi), weights, inkWeights))
     }
-    layers.push(make(wedgeClip(al, rmax + 0.01), wedgeFit(al, 0, rmax + 0.01), copies, shapes, pal.ground))
+    layers.push(make(e => wedgeClip(al, rmax + 0.01, e), wedgeFit(al, 0, rmax + 0.01), copies, shapes, pal.ground))
   }
   else if (f.Symmetry === 'Rings') {
     // radii out to well past any canvas corner, from one fixed sequence
@@ -456,26 +600,31 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
         reach = Math.max(reach, Math.hypot(s.x, s.y) + extent(s))
       rings.push({ r: r0, out: reach, ground })
       const R = Math.min(reach, rmax) + 0.01
-      const clip = k === 0 ? wedgeClip(al, R) : ringClip(al, r0, R)
-      layers.push(make(clip, wedgeFit(al, r0, R), rosetteCopies(n, phase).map(base), shapes, ground))
+      const clipOf = (e: number) => (k === 0 ? wedgeClip(al, R, e) : ringClip(al, r0, R, e))
+      layers.push(make(clipOf, wedgeFit(al, r0, R), rosetteCopies(n, phase).map(base), shapes, ground))
     }
   }
   else {
     let poly: Pt[]
     let turn = 0
+    // straight-sided shapes turn by multiples of this inside the domain
+    let snap = Math.PI / 2
     if (f.Symmetry === 'Square *442') {
       const a = range(lr, 0.4, 0.72) / 2
       poly = [[0, 0], [a, 0], [a, a]]
+      snap = Math.PI / 4
       turn = chance(lr, 0.3) ? Math.PI / 4 : 0
     }
     else if (f.Symmetry === 'Hexagonal *632') {
       const h = range(lr, 0.27, 0.42)
       poly = [[0, 0], [(h * SQ3) / 2, 0], [(h * SQ3) / 2, h / 2]]
+      snap = Math.PI / 6
       turn = chance(lr, 0.5) ? Math.PI / 2 : 0
     }
     else if (f.Symmetry === 'Triangle *333') {
       const s = range(lr, 0.3, 0.48)
       poly = [[0, 0], [s, 0], [s / 2, (s * SQ3) / 2]]
+      snap = Math.PI / 6
       turn = chance(lr, 0.5) ? Math.PI / 2 : 0
     }
     else {
@@ -492,8 +641,22 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
     // the domain's first corner, a centre of highest order, sits at the centre
     const M0 = base(rotation(turn))
     const copies = reflectCopies(poly, poly.map(() => true), M0, [-2, -2, W + 2, H + 2], S)
-    const shapes = motif(mr, polygonRegion(poly, L * 1.1), int(mr, cLo, cHi), weights, inkWeights)
-    layers.push(make(polyPath(grow(poly, e)), polygonFit(poly), copies, shapes, pal.ground))
+    const rect = f.Symmetry === 'Rectangle *2222'
+    let shapes = motif(mr, polygonRegion(poly, L * 1.1, snap), int(mr, cLo, cHi) + (rect ? 2 : 0), weights, inkWeights)
+    if (rect)
+      shapes = ribbons(stream(hash, 'ribbon'), poly, shapes, nInks)
+    const fit = polygonFit(poly)
+    const [x1, y1] = poly.reduce((m, p) => [Math.max(m[0], p[0]), Math.max(m[1], p[1])], [0, 0])
+    const samples: Pt[] = []
+    for (let i = 0; i < 16; i++) {
+      for (let j = 0; j < 16; j++) {
+        const p: Pt = [(x1 * (i + 0.5)) / 16, (y1 * (j + 0.5)) / 16]
+        if (fit({ x: p[0], y: p[1] } as Shape, 1e-9) === 1)
+          samples.push(p)
+      }
+    }
+    shapes = densify(g, shapes, samples, inks, lg, poly[0], L * 0.9)
+    layers.push(make(e => polyPath(grow(poly, e)), fit, copies, shapes, pal.ground))
   }
 
   let cover = 0
@@ -522,7 +685,7 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
       g.fillStyle = ring.ground
       g.fill(P)
     }
-    drawLayer(g, W, H, layers[k], inks, misreg)
+    drawLayer(g, W, H, layers[k], inks, mis)
   }
 
   if (separator && rings.length > 1) {
