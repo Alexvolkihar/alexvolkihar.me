@@ -142,7 +142,7 @@ function render(ctx: CanvasRenderingContext2D, W: number, H: number, hash: strin
   const ground = rgb(pal.ground)
   const ink = rgb(pal.ink)
   const colours = { ground, ink, accent: rgb(pal.accent) }
-  const shocks = buildShocks(sr, EFFECT[f.Shock], count, field.layers[0].pitch, 0.4 + 0.55 * (halfW - 0.5), 0.4 + 0.55 * (halfH - 0.5), colours)
+  const shocks = buildShocks(sr, stream(hash, 'shock-detail'), EFFECT[f.Shock], count, field.layers[0].pitch, 0.4 + 0.55 * (halfW - 0.5), 0.4 + 0.55 * (halfH - 0.5), colours)
   // shocks can fetch the surface from a little beyond the plate
   const baked = new Baked(field, -halfW - 0.2, -halfH - 0.2, halfW + 0.2, halfH + 0.2)
   const plate = new Plate(field, shocks, colours, S, baked)

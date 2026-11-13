@@ -33,6 +33,12 @@ const TRIANGLE = 2
 const SPIKE = 3
 const BAND = 4
 
+/** Ordered-dither thresholds (Bayer 4 × 4), 0 to 15. */
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
+
+/** Line-screen thresholds: whole rows (or columns) of blocks turn at once. */
+const LINES = [2, 10, 6, 14]
+
 const LENS = 0
 const SWIRL = 1
 const TURN = 2
@@ -60,15 +66,16 @@ export interface Shock {
   /** Fault: direction of the slide, at an angle to the cracks. */
   scos: number
   ssin: number
-  /** Fault: small turn of each strip about the shock centre. */
+  /** Fault: turn of each strip about the shock centre. */
   tcos: number[]
   tsin: number[]
-  /** Pixelation: block size, and the last block sampled. */
+  /** Fault: scale of each strip's pattern (1 for none) and its shade towards the ground. */
+  zoom: number[]
+  shade: number[]
+  /** Pixelation: block size, screen (0 Bayer dots, 1 row stripes, 2 column stripes), and the colours of the blocks already sampled. */
   block: number
-  key: number
-  kr: number
-  kg: number
-  kb: number
+  screen: number
+  blocks: Map<number, number>
   /** Warp: lens, swirl or turn, and its strength. */
   mode: number
   power: number
@@ -96,8 +103,10 @@ export interface ShockColours {
  * Builds `count` shocks, the main one first, each smaller than the last.
  * `dominant` is the effect of the main shock (and of most aftershocks), or
  * -1 for a mixed sequence. `ex`, `ey` bound the centres, in short-side units.
+ * `rd` draws the finer details of each shock, so that adding one never
+ * moves the shapes drawn from `r`.
  */
-export function buildShocks(r: Rng, dominant: number, count: number, pitch: number, ex: number, ey: number, col: ShockColours): Shock[] {
+export function buildShocks(r: Rng, rd: Rng, dominant: number, count: number, pitch: number, ex: number, ey: number, col: ShockColours): Shock[] {
   // the main shock, then aftershocks that are each smaller than the last
   const sizes: number[] = [range(r, 0.22, 0.36)]
   for (let i = 1; i < count; i++)
@@ -167,6 +176,12 @@ export function buildShocks(r: Rng, dominant: number, count: number, pitch: numb
       a = size * range(r, 0.12, 0.34)
       reach = Infinity
     }
+    if (effect === ERODE) {
+      // erosion reads best as a patch, never as a whole weathered plate
+      a *= 0.78
+      b *= 0.78
+      reach *= 0.78
+    }
 
     const accentSeam = chance(r, 0.7)
     const outline = r()
@@ -200,10 +215,25 @@ export function buildShocks(r: Rng, dominant: number, count: number, pitch: numb
     const tcos: number[] = []
     const tsin: number[] = []
     for (let k = 0; k < 4; k++) {
-      const tilt = range(r, -0.16, 0.16)
+      const tilt = range(r, -0.16, 0.16) * 2
       tcos.push(Math.cos(tilt))
       tsin.push(Math.sin(tilt))
     }
+
+    // Every other strip is also rescaled and shaded, so the fault reads
+    // even on a fine periodic pattern, where a slide alone barely shows.
+    const zoom: number[] = []
+    const shade: number[] = []
+    const denser = rd() < 0.5
+    for (let k = 0; k < 4; k++) {
+      const z = denser ? range(rd, 1.35, 1.7) : range(rd, 0.55, 0.72)
+      const sh = range(rd, 0.25, 0.4)
+      // even strips, so a band without cuts (one strip) is changed too
+      zoom.push(k & 1 ? 1 : z)
+      shade.push(k & 1 ? 0 : sh)
+    }
+    const sr = rd()
+    const screen = sr < 0.5 ? 0 : sr < 0.75 ? 1 : 2
 
     // blocks a little larger than the pattern pitch, so that sampling a
     // regular pattern on them aliases into a coarser stripe
@@ -214,7 +244,7 @@ export function buildShocks(r: Rng, dominant: number, count: number, pitch: numb
     let power = 0
     const pr = r()
     if (mode === LENS)
-      power = 0.32 + 0.3 * pr
+      power = 0.25 + 0.25 * pr
     else if (mode === SWIRL)
       power = (1.4 + 2.2 * pr) * (r() < 0.5 ? -1 : 1)
     else
@@ -248,11 +278,11 @@ export function buildShocks(r: Rng, dominant: number, count: number, pitch: numb
       ssin: Math.sin(slideAngle),
       tcos,
       tsin,
+      zoom,
+      shade,
       block,
-      key: Number.NaN,
-      kr: 0,
-      kg: 0,
-      kb: 0,
+      screen,
+      blocks: new Map(),
       mode,
       power,
       freq,
@@ -409,12 +439,15 @@ export class Plate {
           gap = Math.min(gap, Math.abs(n - s.cuts[i]))
         }
         const slide = s.slides[j]
-        const c = s.tcos[j]
-        const sn = s.tsin[j]
+        const z = s.zoom[j]
+        const c = s.tcos[j] * z
+        const sn = s.tsin[j] * z
         this.sample(s.cx + dx * c - dy * sn - slide * s.scos, s.cy + dx * sn + dy * c - slide * s.ssin, k - 1)
+        if (s.shade[j] > 0)
+          this.blend(this.col.ground, s.shade[j])
         // the crack opens on the bare ground, with a hairline down its middle
-        if (gap < 0.006) {
-          this.blend(this.col.ground, 0.5 + (0.0034 - gap) * this.px)
+        if (gap < 0.008) {
+          this.blend(this.col.ground, 0.5 + (0.0052 - gap) * this.px)
           this.blend(this.col.accent, 0.5 + (0.0011 - gap) * this.px)
         }
         break
@@ -422,18 +455,20 @@ export class Plate {
       case PIXEL: {
         const bx = Math.floor(dx / s.block)
         const by = Math.floor(dy / s.block)
-        const key = bx * 8192 + by
-        if (key !== s.key) {
-          this.sample(s.cx + (bx + 0.5) * s.block, s.cy + (by + 0.5) * s.block, k - 1)
-          this.snap()
-          s.key = key
-          s.kr = this.r
-          s.kg = this.g
-          s.kb = this.b
+        // a block is computed once (16 samples) and shared by all its pixels;
+        // its colour is stored as packed 8-bit RGB, which is all it becomes
+        const key = bx * 65536 + by
+        let packed = s.blocks.get(key)
+        if (packed === undefined) {
+          this.pixel(s, bx, by, k)
+          packed = (Math.round(this.r) << 16) | (Math.round(this.g) << 8) | Math.round(this.b)
+          if (s.blocks.size > 200_000)
+            s.blocks.clear()
+          s.blocks.set(key, packed)
         }
-        this.r = s.kr
-        this.g = s.kg
-        this.b = s.kb
+        this.r = packed >> 16
+        this.g = (packed >> 8) & 255
+        this.b = packed & 255
         break
       }
       case WARP: {
@@ -465,9 +500,10 @@ export class Plate {
         // eats the pattern more and more towards the inside of the shape
         const depth = Math.min(1, -d / (Math.min(s.a, s.shape === BOX ? s.b : s.a) * 0.9))
         const coarse = this.field.warp.at(x * s.freq + s.ox, y * s.freq)
-        const fine = this.field.tone.at(x * s.freq * 16.3, y * s.freq * 16.3 + s.ox)
-        const n = 0.35 * coarse + 0.65 * fine
-        const keep = Math.min(1, Math.max(0, (n - 0.1 - depth * 0.6) * 9))
+        const fine = this.field.tone.at(x * s.freq * 9.1, y * s.freq * 9.1 + s.ox)
+        const n = 0.62 * coarse + 0.38 * fine
+        // at most about half of the deepest part is worn away
+        const keep = Math.min(1, Math.max(0, (n - 0.08 - depth * 0.42) * 20))
         const g = this.col.ground
         this.r = g[0] + (this.r - g[0]) * keep
         this.g = g[1] + (this.g - g[1]) * keep
@@ -481,7 +517,11 @@ export class Plate {
         const ax = ink[0] - ground[0]
         const ay = ink[1] - ground[1]
         const az = ink[2] - ground[2]
-        const t = Math.min(1, Math.max(0, ((this.r - ground[0]) * ax + (this.g - ground[1]) * ay + (this.b - ground[2]) * az) / (ax * ax + ay * ay + az * az)))
+        let t = Math.min(1, Math.max(0, ((this.r - ground[0]) * ax + (this.g - ground[1]) * ay + (this.b - ground[2]) * az) / (ax * ax + ay * ay + az * az)))
+        // a plain swap of a pattern near half coverage barely shows: thin
+        // the swapped lines so the inverted shape reads as a block
+        if (!s.stain)
+          t *= t
         const bg = s.stain ? accent : ink
         this.r = bg[0] + (ground[0] - bg[0]) * t
         this.g = bg[1] + (ground[1] - bg[1]) * t
@@ -492,8 +532,30 @@ export class Plate {
       this.blend(s.seamColour, 0.5 + (s.seam + d) * this.px)
   }
 
-  /** Rounds a colour lying between ground and ink to the nearer of the two. */
-  private snap(): void {
+  /**
+   * One block of a pixelation: the surface averaged over a 4 × 4 grid of
+   * samples (a smoothed tone, free of the noise of a single sample), then
+   * set to ground or ink by an ordered threshold indexed by the block: a
+   * 4 × 4 Bayer matrix (dots) or a line screen (stripes), so the blocks form
+   * a regular dither rather than random bits.
+   * A block whose average is off the ground-to-ink axis (an accent seam or
+   * stain) keeps its averaged colour.
+   */
+  private pixel(s: Shock, bx: number, by: number, k: number): void {
+    let r = 0
+    let g = 0
+    let b = 0
+    for (let j = 0; j < 4; j++) {
+      for (let i = 0; i < 4; i++) {
+        this.sample(s.cx + (bx + (i + 0.5) / 4) * s.block, s.cy + (by + (j + 0.5) / 4) * s.block, k - 1)
+        r += this.r
+        g += this.g
+        b += this.b
+      }
+    }
+    this.r = r / 16
+    this.g = g / 16
+    this.b = b / 16
     const { ground, ink } = this.col
     const ax = ink[0] - ground[0]
     const ay = ink[1] - ground[1]
@@ -504,7 +566,14 @@ export class Plate {
     const ez = this.b - ground[2] - az * t
     if (ex * ex + ey * ey + ez * ez > 900)
       return
-    const c = t < 0.5 ? ground : ink
+    // stretch the tone a little: thin lines average to a pale grey
+    const tone = Math.min(1, Math.max(0, (t - 0.12) * 1.6))
+    let level: number
+    if (s.screen === 0)
+      level = BAYER[(by & 3) * 4 + (bx & 3)]
+    else
+      level = LINES[(s.screen === 1 ? by : bx) & 3]
+    const c = tone * 16 > level + 0.5 ? ink : ground
     this.r = c[0]
     this.g = c[1]
     this.b = c[2]

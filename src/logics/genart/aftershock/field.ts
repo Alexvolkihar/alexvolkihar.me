@@ -168,7 +168,9 @@ export function makeLayer(r: Rng, family: number, pitch: number, relief: ValueNo
     slopes.sort((a, b) => a - b)
     const median = slopes[slopes.length >> 1]
     layer.step = median * layer.pitch
-    layer.gmin = median * 0.35
+    // only guards the division: the true gradient keeps the contour width
+    // constant, and the lines simply thin out over flat ground
+    layer.gmin = median * 0.02
   }
   return layer
 }
