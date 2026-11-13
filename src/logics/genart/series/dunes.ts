@@ -62,12 +62,15 @@ interface Palette {
   /** Distant haze in the low-angle view, and how far it starts (in torus periods). */
   haze: string
   hazeFar: number
+  /** How much cast shadows darken (default 0.55). */
+  shadowDepth?: number
 }
 
 const PAL: Record<Features['Palette'], Palette> = {
   Erg: { sand: ['#5a2f2a', '#a3593a', '#d48b55', '#f0bb80', '#fde2b8'], floor: ['#8a6448', '#d9b08a'], sky: ['#6f9fcc', '#f2dcc0'], haze: '#ecd3b4', hazeFar: 2.6 },
   Namib: { sand: ['#232a4a', '#7e3a35', '#c95a33', '#f08a4e', '#ffc596'], floor: ['#5e4038', '#c99a7c'], sky: ['#2b62a0', '#f0c9a2'], haze: '#e9b892', hazeFar: 2.6 },
-  Gypsum: { sand: ['#5d6286', '#9da0bd', '#d3d2da', '#f1eee9', '#ffffff'], floor: ['#c9bfae', '#f6f1e8'], sky: ['#5f97d4', '#e7eef4'], haze: '#dfe6ee', hazeFar: 2.6 },
+  // white sand needs deep shadows and a duller floor to keep its relief
+  Gypsum: { sand: ['#41477a', '#878cb4', '#cbcad9', '#efece7', '#ffffff'], floor: ['#a3967e', '#e2d9c6'], sky: ['#5f97d4', '#e7eef4'], haze: '#dfe6ee', hazeFar: 3.4, shadowDepth: 0.72 },
   Dusk: { sand: ['#2f2447', '#6b4466', '#b46a7b', '#eba08f', '#ffd3b3'], floor: ['#4a3550', '#b88a90'], sky: ['#34336a', '#f4ad94'], haze: '#d99a95', hazeFar: 2.6 },
   Mars: { sand: ['#0a0708', '#2b1f1b', '#56433a', '#917866', '#d8bfa3'], floor: ['#3a1d15', '#bb7450'], sky: ['#9c6e50', '#e6c39c'], haze: '#d2a37c', hazeFar: 1.6 },
   Nocturne: { sand: ['#05070e', '#141b2c', '#2c3854', '#6a7c9e', '#c4d2e6'], floor: ['#0b0e16', '#323a4e'], sky: ['#03050a', '#1c2a44'], haze: '#18233a', hazeFar: 3.5 },
@@ -112,6 +115,8 @@ const RIPPLE = 1.1
 const LIFT = 1.5
 /** Size of the fine grain drawn close up in the low-angle view, in cells. */
 const GRAIN = 0.25
+/** Largest raster short side of the low-angle view; bigger canvases are upscaled. */
+const OBLIQUE_MAX = 1600
 /** Patchwork of the aerial view: copies of the torus, and the size of the patches each one holds, in cells. */
 const COPIES = 4
 const PATCH_SIZE = 40
@@ -280,12 +285,14 @@ interface Look {
   rippleGain: number
   /** Light from the sky that lifts the deepest shade, 0 to 1. */
   sky: number
+  /** Keep what the low-angle view needs to redraw slip faces sharp close up. */
+  closeUp: boolean
 }
 
-const AERIAL_LOOK: Look = { contrast: 1, floorTilt: 0.25, rippleGain: 1, sky: 0 }
+const AERIAL_LOOK: Look = { contrast: 1, floorTilt: 0.25, rippleGain: 1, sky: 0, closeUp: false }
 // seen at a low angle, slopes foreshorten: more contrast keeps them legible,
 // and the sky lights the shaded faces a little; ripples are redrawn crisply
-const OBLIQUE_LOOK: Look = { contrast: 1.3, floorTilt: 0.6, rippleGain: 0.35, sky: 0.06 }
+const OBLIQUE_LOOK: Look = { contrast: 1.3, floorTilt: 0.6, rippleGain: 0.22, sky: 0.06, closeUp: true }
 
 function shade(fd: Field, rw: number, rh: number, ppc: number, pal: Palette, light: Light, shadow: Float32Array, rr: Rng, look: Look) {
   const { contrast, floorTilt, sky } = look
@@ -327,10 +334,22 @@ function shade(fd: Field, rw: number, rh: number, ppc: number, pal: Palette, lig
   const rippleAmp = 0.08 * look.rippleGain * Math.min(1, Math.max(0.35, light.sz * 2.4))
   const sand = pal.sand.map(rgb)
   const floor = pal.floor.map(rgb)
+  const depth = pal.shadowDepth ?? 0.55
   const { sx, sy, sz } = light
-  const out = new Uint8ClampedArray(rw * rh * 4)
-  const rip = new Float32Array(rw * rh)
+  const n = rw * rh
+  const out = new Uint8ClampedArray(n * 4)
+  const rip = new Float32Array(n)
+  // close-up extras (low-angle view): the slip share of each sample, how
+  // crisp its edge should be, and how the colour changes from no slip face
+  // to a full one, so the brink can be redrawn sharp at any magnification
+  const LF = look.closeUp ? new Float32Array(n) : null
+  const CRISP = look.closeUp ? new Float32Array(n) : null
+  const DCOL = look.closeUp ? new Int16Array(n * 3) : null
+  // the bare floor alone (aerial view), to taper dunes cut by the patchwork
+  const FLOOR = look.closeUp ? null : new Uint8ClampedArray(n * 3)
   const col: RGB = [0, 0, 0]
+  const alt: RGB = [0, 0, 0]
+  const fl: RGB = [0, 0, 0]
   const tone = (t: number, ramp: RGB[], o: RGB) => {
     const x = Math.min(0.9999, Math.max(0, t)) * (ramp.length - 1)
     const i = Math.floor(x)
@@ -339,9 +358,62 @@ function shade(fd: Field, rw: number, rh: number, ppc: number, pal: Palette, lig
     o[1] = ramp[i][1] + (ramp[i + 1][1] - ramp[i][1]) * k
     o[2] = ramp[i][2] + (ramp[i + 1][2] - ramp[i][2]) * k
   }
-  const fl: RGB = [0, 0, 0]
   const inv = 1 / ppc
   const twoPi = Math.PI * 2
+  // the floor: flat gravel or crust, in fine grain over broad tones
+  const floorTone = (fx: number, fy: number) => {
+    const Lf = (-fx * sx - fy * sy + sz) / Math.sqrt(fx * fx + fy * fy + 1)
+    return Lf >= sz ? 0.62 + 0.38 * (Lf - sz) / (1 - sz) : 0.62 * Math.max(0, Lf) / sz
+  }
+  const paintFloor = (o: number, hx: number, hy: number, u: number, v: number, shd: number, cov: number) => {
+    // under full sand the fine grain is never seen (only where a cut dune
+    // thins out): the broad tones suffice
+    const tex = (0.9 + 0.2 * GRIT[o]) * (cov < 1 ? 0.92 + 0.16 * grain(u * 2.5, v * 2.5) : 1)
+    let ft = cov < 1 ? floorTone(hx * floorTilt, hy * floorTilt) * tex : 0
+    if (FLOOR) {
+      // kept without the shadows and slopes of the sand above: the dune may
+      // be dropped by the patchwork
+      const k = floorTilt * (1 - cov)
+      const f0 = cov <= 0 ? ft : floorTone(hx * k, hy * k) * tex
+      FLOOR[o * 3] = floor[0][0] + (floor[1][0] - floor[0][0]) * f0
+      FLOOR[o * 3 + 1] = floor[0][1] + (floor[1][1] - floor[0][1]) * f0
+      FLOOR[o * 3 + 2] = floor[0][2] + (floor[1][2] - floor[0][2]) * f0
+    }
+    ft *= 1 - depth * shd
+    fl[0] = floor[0][0] + (floor[1][0] - floor[0][0]) * ft
+    fl[1] = floor[0][1] + (floor[1][1] - floor[0][1]) * ft
+    fl[2] = floor[0][2] + (floor[1][2] - floor[0][2]) * ft
+  }
+  // colour of sample o with a slip face of share lf; returns the ripple mask
+  const paint = (o: number, hx: number, hy: number, slope: number, cov: number, u: number, v: number, lf: number, c: RGB) => {
+    if (lf > 0) {
+      const k = lf * (REPOSE / Math.max(1e-6, slope) - 1)
+      hx += hx * k
+      hy += hy * k
+    }
+    // ripples cover the flats and the stoss (windward) slopes, in patches
+    const mask = rippleFade * cov * (1 - lf) * (1 - smooth(0.24, 0.34, slope)) * PATCH[o]
+    if (mask > 0.01) {
+      const ph = twoPi * ((u * fd.wx + v * fd.wy) / RIPPLE + WARP[o])
+      const d = rippleAmp * mask * (Math.cos(ph) + 0.3 * Math.cos(2 * ph))
+      hx += d * fd.wx
+      hy += d * fd.wy
+    }
+    const L = (-hx * sx - hy * sy + sz) / Math.sqrt(hx * hx + hy * hy + 1)
+    let t = L >= sz ? 0.62 + 0.38 * (L - sz) / (1 - sz) : 0.62 * Math.max(0, L) / sz
+    const shd = Math.min(1, Math.max(0, SH[o]))
+    t *= 1 - depth * shd
+    t = sky + (1 - sky) * t
+    t = 0.5 + (t - 0.5) * contrast
+    tone(t * 0.92 + 0.04, sand as RGB[], c)
+    if (cov < 1 || FLOOR) {
+      paintFloor(o, hx, hy, u, v, shd, cov)
+      c[0] = fl[0] + (c[0] - fl[0]) * cov
+      c[1] = fl[1] + (c[1] - fl[1]) * cov
+      c[2] = fl[2] + (c[2] - fl[2]) * cov
+    }
+    return mask
+  }
   for (let q = 0; q < rh; q++) {
     const qa = (q === 0 ? rh - 1 : q - 1) * rw
     const qb = (q === rh - 1 ? 0 : q + 1) * rw
@@ -355,57 +427,39 @@ function shade(fd: Field, rw: number, rh: number, ppc: number, pal: Palette, lig
       const zr = Z[q * rw + pr]
       const zu = Z[qa + p]
       const zd = Z[qb + p]
-      let hx = (zr - zl) * 0.5 * ppc
-      let hy = (zd - zu) * 0.5 * ppc
+      const hx = (zr - zl) * 0.5 * ppc
+      const hy = (zd - zu) * 0.5 * ppc
       const slope = Math.sqrt(hx * hx + hy * hy)
       const cov = Math.min(1, Math.max(0, C[o]))
-      // Slip faces: the smoothed field is steepest where the model built
-      // them. Rebuild them at this resolution as planes at the angle of
-      // repose, facing down the local slope: a crisp brink where the crest
-      // is convex, a softer toe where the slope meets the floor.
+      const u = (p + 0.5) * inv
+      // Slip faces: the model left steps at the angle of repose there.
+      // Rebuild them at this resolution as planes at that angle, facing down
+      // the local slope: a crisp brink where the crest is convex, a softer
+      // toe where the slope meets the floor (blended by curvature rather
+      // than switched, so no stair-steps).
       const curv = (zl + zr + zu + zd - 4 * z0) * ppc * ppc
       let lf = 0
+      let crispW = 0
       if (SL[o] > 0.02) {
-        // blend the two by curvature rather than switch: no stair-steps
         const crisp = smooth(SLIP_LO, SLIP_LO + 0.025, slope)
         const soft = smooth(SLIP_LO - 0.04, SLIP_LO + 0.06, slope)
-        lf = Math.min(1, SL[o]) * (soft + (crisp - soft) * smooth(0.05, -0.05, curv))
+        crispW = smooth(0.05, -0.05, curv)
+        lf = Math.min(1, SL[o]) * (soft + (crisp - soft) * crispW)
       }
-      if (lf > 0) {
-        const k = lf * (REPOSE / Math.max(1e-6, slope) - 1)
-        hx += hx * k
-        hy += hy * k
-      }
-      // ripples cover the flats and the stoss (windward) slopes, in patches
-      const u = (p + 0.5) * inv
-      const mask = rippleFade * cov * (1 - lf) * (1 - smooth(0.24, 0.34, slope)) * PATCH[o]
-      rip[o] = mask
-      if (mask > 0.01) {
-        const ph = twoPi * ((u * fd.wx + v * fd.wy) / RIPPLE + WARP[o])
-        const d = rippleAmp * mask * (Math.cos(ph) + 0.3 * Math.cos(2 * ph))
-        hx += d * fd.wx
-        hy += d * fd.wy
-      }
-      const L = (-hx * sx - hy * sy + sz) / Math.sqrt(hx * hx + hy * hy + 1)
-      let t = L >= sz ? 0.62 + 0.38 * (L - sz) / (1 - sz) : 0.62 * Math.max(0, L) / sz
-      const shd = Math.min(1, Math.max(0, SH[o]))
-      t *= 1 - 0.55 * shd
-      t = sky + (1 - sky) * t
-      t = 0.5 + (t - 0.5) * contrast
-      tone(t * 0.92 + 0.04, sand as RGB[], col)
-      if (cov < 1) {
-        // the floor: flat gravel or crust, in fine grain over broad tones
-        const fx = hx * floorTilt
-        const fy = hy * floorTilt
-        const Lf = (-fx * sx - fy * sy + sz) / Math.sqrt(fx * fx + fy * fy + 1)
-        let ft = Lf >= sz ? 0.62 + 0.38 * (Lf - sz) / (1 - sz) : 0.62 * Math.max(0, Lf) / sz
-        ft *= (1 - 0.55 * shd) * (0.9 + 0.2 * GRIT[o]) * (0.92 + 0.16 * grain(u * 2.5, v * 2.5))
-        fl[0] = floor[0][0] + (floor[1][0] - floor[0][0]) * ft
-        fl[1] = floor[0][1] + (floor[1][1] - floor[0][1]) * ft
-        fl[2] = floor[0][2] + (floor[1][2] - floor[0][2]) * ft
-        col[0] = fl[0] + (col[0] - fl[0]) * cov
-        col[1] = fl[1] + (col[1] - fl[1]) * cov
-        col[2] = fl[2] + (col[2] - fl[2]) * cov
+      rip[o] = paint(o, hx, hy, slope, cov, u, v, lf, col)
+      if (LF && CRISP && DCOL) {
+        LF[o] = lf
+        if (lf > 0.002 && lf < 0.998) {
+          CRISP[o] = crispW * Math.min(1, SL[o])
+          paint(o, hx, hy, slope, cov, u, v, 1, alt)
+          DCOL[o * 3] = alt[0] - col[0]
+          DCOL[o * 3 + 1] = alt[1] - col[1]
+          DCOL[o * 3 + 2] = alt[2] - col[2]
+          paint(o, hx, hy, slope, cov, u, v, 0, alt)
+          DCOL[o * 3] -= alt[0] - col[0]
+          DCOL[o * 3 + 1] -= alt[1] - col[1]
+          DCOL[o * 3 + 2] -= alt[2] - col[2]
+        }
       }
       out[o * 4] = col[0]
       out[o * 4 + 1] = col[1]
@@ -413,7 +467,7 @@ function shade(fd: Field, rw: number, rh: number, ppc: number, pal: Palette, lig
       out[o * 4 + 3] = 255
     }
   }
-  return { rgba: out, Z, rip, warp: WARP }
+  return { rgba: out, Z, rip, warp: WARP, lf: LF, crisp: CRISP, dcol: DCOL, floor: FLOOR }
 }
 
 function lightFor(lr: Rng, f: Features, wx: number, wy: number): { light: Light, lx: number, ly: number, tanAlt: number } {
@@ -474,7 +528,10 @@ function renderAerial(g: CanvasRenderingContext2D, W: number, H: number, hash: s
   const shadow = castShadows(fd, lit.lx, lit.ly, lit.tanAlt)
   const tex = Math.min(12, Math.max(3, Math.ceil(1.05 / cpp)))
   const T = N * tex
-  const { rgba: trgb, Z: tz } = shade(fd, T, T, tex, pal, lit.light, shadow, stream(hash, 'ripples'), AERIAL_LOOK)
+  const shaded = shade(fd, T, T, tex, pal, lit.light, shadow, stream(hash, 'ripples'), AERIAL_LOOK)
+  const trgb = shaded.rgba
+  const tz = shaded.Z
+  const tfloor = shaded.floor!
 
   // warp offsets (cells), separable: one sine per screen axis and world axis
   const two = Math.PI * 2
@@ -520,22 +577,26 @@ function renderAerial(g: CanvasRenderingContext2D, W: number, H: number, hash: s
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
           const c = ((y + dy + N) % N) * N + (x + dx + N) % N
-          if (fd.cover[c] > 0.03)
+          if (fd.cover[c] > 0.005)
             sandMask[y * N + x] = 1
-          if (shadow[c] > 0.03)
+          if (shadow[c] > 0.01)
             shadeMask[y * N + x] = 1
         }
       }
     }
   }
   const pr = stream(hash, 'patch')
-  const shift = Array.from({ length: COPIES }, (_, k) => k === 0 ? [0, 0] as const : [pr() * N, pr() * N] as const)
+  // whole cells, so the seams of the patchwork follow the cells of the dunes
+  const shift = Array.from({ length: COPIES }, (_, k) => k === 0 ? [0, 0] as const : [Math.floor(pr() * N), Math.floor(pr() * N)] as const)
   const noise = Array.from({ length: COPIES }, () => latticeNoise(pr))
   // the first copy holds the middle of the canvas: a square crop shows the
   // simulated field as it grew, and wider ones gain new dunes on the sides
   const base = noise[0]
   const span = periods * N
-  noise[0] = (x, y) => base(x, y) + 2 * (1 - smooth(0.35, 0.55, Math.hypot(x * PATCH_SIZE - cx, y * PATCH_SIZE - cy) / span))
+  const fromMiddle = (x: number, y: number) => Math.hypot(x * PATCH_SIZE - cx, y * PATCH_SIZE - cy) / span
+  noise[0] = (x, y) => base(x, y) + 2 * (1 - smooth(0.35, 0.55, fromMiddle(x, y)))
+  // and where its dunes overlap another copy's, it wins out to the corners
+  const firstBias = (x: number, y: number) => 2 * (1 - smooth(0.55, 0.8, fromMiddle(x, y)))
   // world box seen by the canvas, with the warp and one cell to spare
   let bx0 = Infinity
   let by0 = Infinity
@@ -557,7 +618,7 @@ function renderAerial(g: CanvasRenderingContext2D, W: number, H: number, hash: s
   const dunes = dunePatches(sandMask, fd.sand, N, NECK)
   castBy(dunes, sandMask, shadeMask, N, lit.lx, lit.ly)
   const copies = dunes.wrapShare > 0.3 ? 1 : COPIES
-  const { own, alt } = owners(dunes, fd.sand, N, shift.slice(0, copies), noise.slice(0, copies), PATCH_SIZE, ox, oy, ow, oh)
+  const { own, alt, fade } = owners(dunes, fd.sand, N, shift.slice(0, copies), noise.slice(0, copies), PATCH_SIZE, ox, oy, ow, oh, firstBias)
 
   const out = new Uint8ClampedArray(rw * rh * 4)
   const acc = new Float32Array(3)
@@ -609,8 +670,28 @@ function renderAerial(g: CanvasRenderingContext2D, W: number, H: number, hash: s
     const a1 = tz[y1 * T + x0] + (tz[y1 * T + x1] - tz[y1 * T + x0]) * tx
     return a0 + (a1 - a0) * ty
   }
+  // adds copy k's floor at world (wx, wy), with weight w, to acc
+  const addFloor = (k: number, wx: number, wy: number, w: number) => {
+    let xi = Math.round((wx + shift[k][0]) * tex - 0.5) % T
+    if (xi < 0)
+      xi += T
+    let yi = Math.round((wy + shift[k][1]) * tex - 0.5) % T
+    if (yi < 0)
+      yi += T
+    const f3 = (yi * T + xi) * 3
+    acc[0] += tfloor[f3] * w
+    acc[1] += tfloor[f3 + 1] * w
+    acc[2] += tfloor[f3 + 2] * w
+  }
+  const corner = (k: number, f: number, w: number, wx: number, wy: number) => {
+    if (w <= 0.0005)
+      return
+    if (f > 0)
+      add(k, wx, wy, w * f)
+    if (f < 1)
+      addFloor(k, wx, wy, w * (1 - f))
+  }
   const ks = new Int32Array(8)
-  const kw = new Float32Array(8)
   for (let q = 0; q < rh; q++) {
     const rx = rowWX[q]
     const ry = rowWY[q]
@@ -662,29 +743,16 @@ function renderAerial(g: CanvasRenderingContext2D, W: number, H: number, hash: s
         if (w1 < 1)
           add(k2, wx, wy, 1 - w1)
       }
-      else if (a === b && a === c && a === d) {
+      else if (a === b && a === c && a === d && fade[g0] === 1 && fade[g0 + 1] === 1 && fade[g0 + ow] === 1 && fade[g0 + ow + 1] === 1) {
         add(a, wx, wy, 1)
       }
       else {
-        let m = 0
-        const put = (k: number, w: number) => {
-          for (let e = 0; e < m; e++) {
-            if (ks[e] === k) {
-              kw[e] += w
-              return
-            }
-          }
-          ks[m] = k
-          kw[m++] = w
-        }
-        put(a, (1 - fx) * (1 - fy))
-        put(b, fx * (1 - fy))
-        put(c, (1 - fx) * fy)
-        put(d, fx * fy)
-        for (let e = 0; e < m; e++) {
-          if (kw[e] > 0.001)
-            add(ks[e], wx, wy, kw[e])
-        }
+        // a soft seam: each corner cell brings its own copy, and near a cut
+        // the sand thins out into that copy's floor
+        corner(a, fade[g0], (1 - fx) * (1 - fy), wx, wy)
+        corner(b, fade[g0 + 1], fx * (1 - fy), wx, wy)
+        corner(c, fade[g0 + ow], (1 - fx) * fy, wx, wy)
+        corner(d, fade[g0 + ow + 1], fx * fy, wx, wy)
       }
       const o = (q * rw + p) * 4
       out[o] = acc[0]
@@ -703,18 +771,21 @@ function renderOblique(g: CanvasRenderingContext2D, W: number, H: number, hash: 
   const fd = buildField(hash, f)
   const lit = lightFor(stream(hash, 'light'), f, fd.wx, fd.wy)
   const shadow = castShadows(fd, lit.lx, lit.ly, lit.tanAlt)
-  const k = Math.min(1, 1200 / S)
+  const k = Math.min(1, OBLIQUE_MAX / S)
   const rw = Math.max(1, Math.round(W * k))
   const rh = Math.max(1, Math.round(H * k))
   const rs = Math.min(rw, rh)
   // texture samples per cell: enough for the foreground at this size
-  const TEX = Math.min(12, Math.max(5, Math.round(rs / 90)))
+  const TEX = Math.min(10, Math.max(4, Math.round(rs / 130)))
   const T = N * TEX
   const tex = shade(fd, T, T, TEX, pal, lit.light, shadow, stream(hash, 'ripples'), OBLIQUE_LOOK)
   const tz = tex.Z
   const trgb = tex.rgba
   const trip = tex.rip
   const twarp = tex.warp
+  const tlf = tex.lf!
+  const tcrisp = tex.crisp!
+  const tdcol = tex.dcol!
   const grainN = periodicNoise(stream(hash, 'grain'), Math.round(N / GRAIN), Math.round(N / GRAIN))
   // close up, ripples are redrawn crisply from their phase rather than
   // magnified from the texture: brightness follows the light along the wind
@@ -815,8 +886,13 @@ function renderOblique(g: CanvasRenderingContext2D, W: number, H: number, hash: 
     offs[p] = (p + 0.5 - rw / 2) / focal
   const far = N * 5
   const hazeLen = N * pal.hazeFar
+  // Slices: geometric far away; from just before the nearest visible ground,
+  // about one raster row apart, so close sand is drawn row by row and its
+  // ripples and grain stay sharp.
+  const rowStep = camZ * focal
+  const nearZ = 0.6 * rowStep / Math.max(1, rh - hy)
   let z = 1.5
-  let dz = 0.02
+  let dz = 0.018
   while (z < far) {
     const fog = 1 - Math.exp(-z / hazeLen)
     const cx = camX + fwx * z
@@ -855,24 +931,71 @@ function renderOblique(g: CanvasRenderingContext2D, W: number, H: number, hash: 
       const from = Math.max(0, Math.floor(sy))
       if (from >= yb)
         continue
-      const r = trgb[i00 * 4] * w00 + trgb[i10 * 4] * w10 + trgb[i01 * 4] * w01 + trgb[i11 * 4] * w11
-      const gg = trgb[i00 * 4 + 1] * w00 + trgb[i10 * 4 + 1] * w10 + trgb[i01 * 4 + 1] * w01 + trgb[i11 * 4 + 1] * w11
-      const b = trgb[i00 * 4 + 2] * w00 + trgb[i10 * 4 + 2] * w10 + trgb[i01 * 4 + 2] * w01 + trgb[i11 * 4 + 2] * w11
+      let r = trgb[i00 * 4] * w00 + trgb[i10 * 4] * w10 + trgb[i01 * 4] * w01 + trgb[i11 * 4] * w11
+      let gg = trgb[i00 * 4 + 1] * w00 + trgb[i10 * 4 + 1] * w10 + trgb[i01 * 4 + 1] * w01 + trgb[i11 * 4 + 1] * w11
+      let b = trgb[i00 * 4 + 2] * w00 + trgb[i10 * 4 + 2] * w10 + trgb[i01 * 4 + 2] * w01 + trgb[i11 * 4 + 2] * w11
+      // Brink: magnified, the edge of a slip face spreads over a texel.
+      // Redraw it as a step about a pixel wide where the crest is convex.
+      const mag = scale / TEX
+      if (mag > 1.2) {
+        const lfI = tlf[i00] * w00 + tlf[i10] * w10 + tlf[i01] * w01 + tlf[i11] * w11
+        if (lfI > 0.003 && lfI < 0.997) {
+          // only a true brink: slip share jumping across a texel, convex
+          const jump = Math.abs(tlf[i10] - tlf[i00]) + Math.abs(tlf[i01] - tlf[i00]) + Math.abs(tlf[i11] - tlf[i00])
+          const cw = (tcrisp[i00] * w00 + tcrisp[i10] * w10 + tcrisp[i01] * w01 + tcrisp[i11] * w11) * smooth(0.25, 0.6, jump)
+          if (cw > 0.01) {
+            const e = Math.min(0.2, Math.max(0.04, 0.6 / mag))
+            const sharp = smooth(0.5 - e, 0.5 + e, lfI)
+            const dl = (sharp - lfI) * cw * smooth(1.2, 3, mag)
+            r += dl * (tdcol[i00 * 3] * w00 + tdcol[i10 * 3] * w10 + tdcol[i01 * 3] * w01 + tdcol[i11 * 3] * w11)
+            gg += dl * (tdcol[i00 * 3 + 1] * w00 + tdcol[i10 * 3 + 1] * w10 + tdcol[i01 * 3 + 1] * w01 + tdcol[i11 * 3 + 1] * w11)
+            b += dl * (tdcol[i00 * 3 + 2] * w00 + tdcol[i10 * 3 + 2] * w10 + tdcol[i01 * 3 + 2] * w01 + tdcol[i11 * 3 + 2] * w11)
+            // and a thin lit lip along the brink
+            const lip = cw * Math.exp(-(((lfI - 0.5) / Math.min(e, 0.08)) ** 2)) * smooth(2, 5, mag)
+            r += lip * 0.12 * (255 - r)
+            gg += lip * 0.12 * (255 - gg)
+            b += lip * 0.12 * (255 - b)
+          }
+        }
+      }
       let mod = 1
       const wxw = cx + rtx * off
       const wyw = cy + rty * off
       // close up, a fine grain keeps the ground from looking like a blur
       const gpx = GRAIN * scale
-      if (gpx > 1.5 && GRAIN > 2 * dz)
-        mod += 0.2 * smooth(1.5, 4, gpx) * smooth(2, 4, GRAIN / dz) * (grainN(wxw / GRAIN, wyw / GRAIN) - 0.5)
+      if (gpx > 1.5 && GRAIN > 2 * dz) {
+        // three octaves, each shown only while a few pixels wide (value
+        // noise magnified further turns into soft squares)
+        let gs = GRAIN
+        let px = gpx
+        let amp = 0.2
+        for (let oct = 0; oct < 3 && px > 1.5 && gs > 2 * dz; oct++) {
+          const w = smooth(1.5, 4, px) * (1 - smooth(9, 20, px)) * smooth(2, 4, gs / dz)
+          if (w > 0)
+            mod += amp * w * (grainN(wxw / gs + oct * 17.3, wyw / gs + oct * 5.1) - 0.5)
+          gs /= 3
+          px /= 3
+          amp *= 0.8
+        }
+      }
       const rpx = RIPPLE * scale
-      // a ripple must span several pixels across and several slices deep
+      // Ripples are drawn from their phase on the ground, so they follow
+      // the surface in perspective; a ripple must span several pixels across
+      // and several slices deep. Close up, a finer set takes over.
       if (rpx > 3 && RIPPLE > 3 * dz) {
         const rm = trip[i00] * w00 + trip[i10] * w10 + trip[i01] * w01 + trip[i11] * w11
         if (rm > 0.02) {
           const wp = twarp[i00] * w00 + twarp[i10] * w10 + twarp[i01] * w01 + twarp[i11] * w11
           const ph = 2 * Math.PI * ((wxw * fd.wx + wyw * fd.wy) / RIPPLE + wp)
           mod += 0.16 * rm * ripLight * smooth(3, 7, rpx) * (1 - smooth(14, 30, rpx)) * smooth(3, 6, RIPPLE / dz) * Math.sin(ph)
+          const small = RIPPLE / 3.2
+          const spx = small * scale
+          if (spx > 3 && small > 3 * dz) {
+            const ph2 = 2 * Math.PI * ((wxw * fd.wx + wyw * fd.wy) / small + 3.2 * wp + 0.4 * Math.sin(ph))
+            const s2 = Math.sin(ph2)
+            // sharp-crested: steep lee, gentle stoss
+            mod += 0.12 * rm * ripLight * smooth(3, 7, spx) * smooth(3, 6, small / dz) * (s2 + 0.35 * Math.sin(2 * ph2))
+          }
         }
       }
       const cr = r * mod + (haze[0] - r * mod) * fog
@@ -887,7 +1010,7 @@ function renderOblique(g: CanvasRenderingContext2D, W: number, H: number, hash: 
       ybuf[p] = from
     }
     z += dz
-    dz *= 1.012
+    dz = z < nearZ ? 0.012 * z : Math.min(0.012 * z, Math.max(0.002, 2 * z * z / rowStep))
   }
   blit(g, out, rw, rh, W, H)
 }

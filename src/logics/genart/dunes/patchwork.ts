@@ -13,6 +13,11 @@
 
 import type { Noise2 } from './field'
 
+/** Sand higher than this (cells) counts when two kept dunes overlap. */
+const OVERLAP = 0.3
+/** Length of the taper where the patchwork cuts a dune from its neighbour, in cells. */
+const TAPER = 3
+
 export interface Dunes {
   /** Dune of each cell (-1 on bare floor), on the n x n torus. */
   label: Int32Array
@@ -245,87 +250,199 @@ export interface Owners {
   own: Uint8Array
   /** A second copy with a kept dune in the cell (255 if none): the taller one shows. */
   alt: Uint8Array
+  /** Below 1 near a cut: how much of the sand is left, tapering into the floor. */
+  fade: Float32Array
 }
 
 /**
  * Picks the copy shown in every world cell of the box [x0, x0 + bw) x
  * [y0, y0 + bh). Copy k sits at world position p when the torus is read at
  * p + shift[k]. `z` is the height on the torus, `noise` one slow noise per
- * copy, read at world position / `size`.
+ * copy, read at world position / `size`. `firstBias`, read there too,
+ * favours the first copy when two kept dunes overlap.
  */
-export function owners(d: Dunes, z: Float32Array, n: number, shift: readonly (readonly [number, number])[], noise: readonly Noise2[], size: number, x0: number, y0: number, bw: number, bh: number): Owners {
+export function owners(d: Dunes, z: Float32Array, n: number, shift: readonly (readonly [number, number])[], noise: readonly Noise2[], size: number, x0: number, y0: number, bw: number, bh: number, firstBias?: Noise2): Owners {
   const copies = shift.length
   const own = new Uint8Array(bw * bh)
   const alt = new Uint8Array(bw * bh).fill(255)
   const memo = new Map<number, boolean>()
+  // how clearly each kept dune won its place: the clearer one stays
+  const margin = new Map<number, number>()
   const nPatch = d.cx.length
   // is the instance of patch `id` of copy `k` lying in torus tile (tx, ty) kept?
   const kept = (k: number, id: number, tx: number, ty: number) => {
     if (d.wraps[id])
       return k === 0
-    const key = ((k * nPatch + id) * 4096 + (tx + 2048)) * 4096 + (ty + 2048)
+    const key = ((k * nPatch + id) * 256 + (tx & 255)) * 256 + (ty & 255)
     let v = memo.get(key)
     if (v === undefined) {
       const wx = (tx * n + d.cx[id] - shift[k][0]) / size
       const wy = (ty * n + d.cy[id] - shift[k][1]) / size
       const mine = noise[k](wx, wy)
-      v = true
+      let other = -Infinity
       for (let j = 0; j < copies; j++) {
-        if (j !== k && noise[j](wx, wy) > mine) {
-          v = false
-          break
-        }
+        if (j !== k)
+          other = Math.max(other, noise[j](wx, wy))
       }
+      v = mine > other
       memo.set(key, v)
+      margin.set(key, mine - other + (k === 0 && firstBias ? firstBias(wx, wy) : 0))
     }
     return v
   }
-  for (let j = 0; j < bh; j++) {
-    for (let i = 0; i < bw; i++) {
-      const px = x0 + i + 0.5
-      const py = y0 + j + 0.5
-      let best = -1
-      let bestZ = -Infinity
-      let second = -1
-      let bare = -1
-      let low = 0
-      let lowZ = Infinity
-      for (let k = 0; k < copies; k++) {
-        const u = px + shift[k][0]
-        const v = py + shift[k][1]
-        const fx = Math.floor(u / n)
-        const fy = Math.floor(v / n)
-        const lu = u - fx * n
-        const lv = v - fy * n
-        const c = Math.min(n - 1, lv | 0) * n + Math.min(n - 1, lu | 0)
-        const id = d.label[c]
-        if (z[c] < lowZ) {
-          lowZ = z[c]
-          low = k
-        }
-        if (id < 0) {
-          if (bare < 0)
-            bare = k
-          continue
-        }
-        const tx = fx - d.relX[c]
-        const ty = fy - d.relY[c]
-        if (kept(k, id, tx, ty)) {
+  const keyOf = (k: number, id: number, tx: number, ty: number) => ((k * nPatch + id) * 256 + (tx & 255)) * 256 + (ty & 255)
+  // sand cells whose copy shows only floor there: the floor of a dropped dune
+  const bareCell = new Uint8Array(bw * bh)
+  // dune of each copy under each world cell (-1 on floor), and whether kept
+  const idOf = new Int32Array(bw * bh * copies)
+  const keptOf = new Uint8Array(bw * bh * copies)
+  // Two passes: where kept dunes of two copies overlap, the smaller one is
+  // dropped whole and the grid is filled again.
+  const conflicts = new Map<number, number>()
+  for (let round = 0; round < 2; round++) {
+    conflicts.clear()
+    for (let j = 0; j < bh; j++) {
+      for (let i = 0; i < bw; i++) {
+        const px = x0 + i + 0.5
+        const py = y0 + j + 0.5
+        let best = -1
+        let bestZ = -Infinity
+        let bestKey = 0
+        let second = -1
+        let bare = -1
+        let low = 0
+        let lowZ = Infinity
+        for (let k = 0; k < copies; k++) {
+          const u = px + shift[k][0]
+          const v = py + shift[k][1]
+          const fx = Math.floor(u / n)
+          const fy = Math.floor(v / n)
+          const lu = u - fx * n
+          const lv = v - fy * n
+          const c = Math.min(n - 1, lv | 0) * n + Math.min(n - 1, lu | 0)
+          const id = d.label[c]
+          const slot = (j * bw + i) * copies + k
+          idOf[slot] = id
+          keptOf[slot] = 0
+          if (z[c] < lowZ) {
+            lowZ = z[c]
+            low = k
+          }
+          if (id < 0) {
+            if (bare < 0)
+              bare = k
+            continue
+          }
+          const tx = fx - d.relX[c]
+          const ty = fy - d.relY[c]
+          if (!kept(k, id, tx, ty))
+            continue
+          keptOf[slot] = 1
+          const key = keyOf(k, id, tx, ty)
+          if (best >= 0 && round === 0 && z[c] > OVERLAP && bestZ > OVERLAP && !d.wraps[id]) {
+            // two kept dunes overlap: drop the one that won its place less
+            // clearly (a dune that wraps always stays)
+            if ((margin.get(bestKey) ?? Infinity) >= (margin.get(key) ?? Infinity))
+              conflicts.set(key, 1)
+            else
+              conflicts.set(bestKey, 1)
+          }
           if (z[c] > bestZ) {
             second = best
             bestZ = z[c]
             best = k
+            bestKey = key
           }
           else if (second < 0) {
             second = k
           }
         }
+        // kept sand first, then bare floor; else the floor of the lowest sand
+        const o = j * bw + i
+        own[o] = best >= 0 ? best : bare >= 0 ? bare : low
+        bareCell[o] = best < 0 && bare < 0 ? 1 : 0
+        alt[o] = second >= 0 ? second : 255
       }
-      // kept sand first, then bare floor; else the lowest sand, in a trough
-      own[j * bw + i] = best >= 0 ? best : bare >= 0 ? bare : low
-      if (second >= 0)
-        alt[j * bw + i] = second
+    }
+    if (!conflicts.size)
+      break
+    for (const key of conflicts.keys())
+      memo.set(key, false)
+  }
+
+  // A dune split from a dropped neighbour at a low neck would end in a
+  // sharp cut: find those cuts and taper the kept sand into the floor over
+  // TAPER cells, as a horn thins out.
+  const cells = bw * bh
+  const dist = new Float32Array(cells).fill(Infinity)
+  const seed = new Int32Array(cells).fill(-1)
+  const mine = new Int32Array(cells).fill(-1)
+  for (let j = 0; j < bh; j++) {
+    for (let i = 0; i < bw; i++) {
+      const o = j * bw + i
+      const k = own[o]
+      const id = idOf[o * copies + k]
+      if (id < 0 || !keptOf[o * copies + k])
+        continue
+      mine[o] = id
+      for (let dy = -1; dy <= 1 && seed[o] < 0; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const ni = i + dx
+          const nj = j + dy
+          if ((!dx && !dy) || ni < 0 || nj < 0 || ni >= bw || nj >= bh)
+            continue
+          const m = (nj * bw + ni) * copies + k
+          const id2 = idOf[m]
+          if (id2 >= 0 && id2 !== id && !keptOf[m]) {
+            dist[o] = 0.5
+            seed[o] = id
+            break
+          }
+        }
+      }
     }
   }
-  return { x0, y0, bw, bh, own, alt }
+  // two-pass chamfer distance from the cuts, within the dune that was cut
+  const relax = (o: number, m: number, w: number) => {
+    if (seed[m] < 0)
+      return
+    const dd = dist[m] + w
+    if (dd < dist[o] && dd < TAPER && mine[o] === seed[m] && own[o] === own[m]) {
+      dist[o] = dd
+      seed[o] = seed[m]
+    }
+  }
+  const pass = (from: number, to: number, step: number) => {
+    for (let j = from; j !== to; j += step) {
+      const nj = j - step
+      const rowOk = nj >= 0 && nj < bh
+      for (let ii = 0; ii < bw; ii++) {
+        const i = step > 0 ? ii : bw - 1 - ii
+        const o = j * bw + i
+        if (mine[o] < 0)
+          continue
+        const ni = i - step
+        if (ni >= 0 && ni < bw)
+          relax(o, j * bw + ni, 1)
+        if (rowOk) {
+          relax(o, nj * bw + i, 1)
+          if (ni >= 0 && ni < bw)
+            relax(o, nj * bw + ni, Math.SQRT2)
+          const pi = i + step
+          if (pi >= 0 && pi < bw)
+            relax(o, nj * bw + pi, Math.SQRT2)
+        }
+      }
+    }
+  }
+  pass(0, bh, 1)
+  pass(bh - 1, -1, -1)
+  const fade = new Float32Array(cells).fill(1)
+  for (let o = 0; o < cells; o++) {
+    if (bareCell[o])
+      fade[o] = 0
+    else if (seed[o] >= 0)
+      fade[o] = Math.min(1, dist[o] / TAPER) ** 1.5
+  }
+  return { x0, y0, bw, bh, own, alt, fade }
 }
