@@ -201,8 +201,12 @@ export function furnish(plan: Plan, r: Rng): Piece[] {
           if (ok < 0)
             ok = R.wall('bed2', 5.4, 6.8, sides, false, 1.5)
         }
-        if (ok < 0 && R.wall('bed1', 4.6, 6.8, sides, true, 1.5) < 0 && R.wall('bed1', 3.1, 6.8, sides, true, 1) < 0)
-          R.wall('bed1', 3.1, 6.6, sides, true, 0)
+        if (ok < 0 && R.wall('bed1', 4.6, 6.8, sides, true, 1.5) < 0 && R.wall('bed1', 3.1, 6.8, sides, true, 1) < 0
+          && R.wall('bed1', 3.1, 6.6, sides, true, 0) < 0) {
+          // a narrow bed in a tight room, as a last resort
+          if (R.wall('bed1', 3, 6.3, [0, 1, 2, 3], true, 0) < 0)
+            R.wall('bed1', 2.9, 6, [0, 1, 2, 3], true, 0)
+        }
         R.wall('wardrobe', Math.min(8, Math.max(4, big * 0.55)), 2, R.sides(true), true, 1.5, 3)
         if (chance(r, 0.5))
           R.wall('desk', 4.4, 3.4, R.sides(false), true)

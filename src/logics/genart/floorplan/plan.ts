@@ -9,6 +9,8 @@
 // (2010): whichever gives the better-proportioned rooms. Doors follow a
 // minimum spanning tree (Prim) of the room adjacency graph, weighted by how
 // natural each connection is; walls are the merged cell edges between rooms.
+// The bedroom suite never shares the day zone without a hall between them,
+// and any room the tree leaves without a door gets one afterwards.
 
 import type { Rng } from '../random'
 import { chance, int, range } from '../random'
@@ -97,6 +99,11 @@ type Piece = Rect & { type: RoomType }
 const area = (r: Rect) => (r.x1 - r.x0) * (r.y1 - r.y0)
 const wOf = (r: Rect) => r.x1 - r.x0
 const hOf = (r: Rect) => r.y1 - r.y0
+
+/** The bedroom suite: never in the same part of the house as the living room. */
+const NIGHT_ITEMS: ReadonlySet<RoomType> = new Set(['master', 'bedroom', 'dressing', 'bath'])
+const DAY_CORE: ReadonlySet<RoomType> = new Set(['entry', 'living', 'kitchen', 'dining'])
+const weight = (l: Item[]) => l.reduce((s, it) => s + it.w, 0)
 
 // ---------------------------------------------------------------- program
 
@@ -256,7 +263,26 @@ function squarify(rect: Rect, itemsIn: Item[], out: Piece[]) {
   }
 }
 
-function score(pieces: Piece[]) {
+/** A single row of rooms, all opening onto the `access` side of the rectangle. */
+function row(rect: Rect, items: Item[], access: Side, out: Piece[]) {
+  const horiz = access === 0 || access === 2
+  const lo = horiz ? rect.x0 : rect.y0
+  const len = horiz ? wOf(rect) : hOf(rect)
+  const total = items.reduce((s, it) => s + it.w, 0)
+  let acc = 0
+  let prev = lo
+  items.forEach((it, i) => {
+    acc += it.w
+    const pos = i === items.length - 1 ? lo + len : lo + Math.round((len * acc) / total)
+    out.push(horiz ? { ...rect, x0: prev, x1: pos, type: it.type } : { ...rect, y0: prev, y1: pos, type: it.type })
+    prev = pos
+  })
+}
+
+/** Rooms that must open onto the corridor rather than through another room. */
+const NEEDS_HALL: Partial<Record<RoomType, number>> = { bedroom: 70, master: 70, study: 14, wc: 14, storage: 10, laundry: 10, stair: 14, bath: 8 }
+
+function score(pieces: Piece[], rect: Rect, access: Side | -1) {
   let p = 0
   for (const q of pieces) {
     const w = wOf(q)
@@ -267,11 +293,17 @@ function score(pieces: Piece[]) {
     if (d <= 0)
       p += 1000
     p += Math.max(0, Math.max(w, h) / Math.max(1, d) - 2.2) * 3
+    if (access >= 0) {
+      const on = access === 0 ? q.y0 === rect.y0 : access === 1 ? q.x1 === rect.x1 : access === 2 ? q.y1 === rect.y1 : q.x0 === rect.x0
+      const run = access === 0 || access === 2 ? w : h
+      if (!on || run < 4)
+        p += NEEDS_HALL[q.type] ?? 0
+    }
   }
   return p
 }
 
-function partition(rect: Rect, items: Item[], r: Rng): Piece[] {
+function partition(rect: Rect, items: Item[], r: Rng, access: Side | -1 = -1): Piece[] {
   const cands: Piece[][] = []
   const a: Piece[] = []
   bsp(rect, items, a)
@@ -282,12 +314,19 @@ function partition(rect: Rect, items: Item[], r: Rng): Piece[] {
   const c: Piece[] = []
   bsp(rect, [...items].reverse(), c)
   cands.push(c)
+  if (access >= 0) {
+    const d: Piece[] = []
+    row(rect, items, access, d)
+    cands.push(d)
+  }
   // a coin decides which method wins ties, so both styles appear
   const order = chance(r, 0.5) ? [1, 0, 2] : [0, 1, 2]
+  if (access >= 0)
+    order.push(3)
   let best = cands[order[0]]
-  let bs = score(best)
+  let bs = score(best, rect, access)
   for (const k of order.slice(1)) {
-    const s = score(cands[k])
+    const s = score(cands[k], rect, access)
     if (s < bs - 0.5) {
       best = cands[k]
       bs = s
@@ -554,29 +593,147 @@ function normalise(zs: Zone[]): Zone[] {
   return zs
 }
 
-/** Corridor band of a house's night zone. */
-function houseCorridor(zone: Zone, r: Rng): Piece | null {
+/**
+ * Corridor of a house's night zone. Along the side that touches the rest of
+ * the house when the rooms behind it stay shallow; otherwise a spine that
+ * leaves that side at right angles and serves rooms on both of its flanks.
+ */
+function houseCorridor(zone: Zone, placed: Piece[], n: number, r: Rng): Piece | null {
   const W = wOf(zone)
   const H = hOf(zone)
-  const alongX = W >= H
   const CW = 4
-  const depth = alongX ? H : W
-  if (depth < 9 + CW + 2)
-    return null
-  const parallel = zone.parent >= 0 && (alongX ? (zone.parent === 0 || zone.parent === 2) : (zone.parent === 1 || zone.parent === 3))
-  let off: number
-  if (parallel) {
-    off = (zone.parent === 0 || zone.parent === 3) ? 0 : depth - CW
+  const band = (alongX: boolean, off: number): Piece => alongX
+    ? { x0: zone.x0, x1: zone.x1, y0: zone.y0 + off, y1: zone.y0 + off + CW, type: 'corridor' }
+    : { x0: zone.x0 + off, x1: zone.x0 + off + CW, y0: zone.y0, y1: zone.y1, type: 'corridor' }
+  const p = zone.parent
+  if (p < 0) {
+    const alongX = W >= H
+    const depth = alongX ? H : W
+    if (depth < 9 + CW)
+      return null
+    return band(alongX, depth >= 2 * 9 + CW ? Math.round((depth - CW) / 2) : (chance(r, 0.5) ? 0 : depth - CW))
   }
-  else if (depth >= 2 * 9 + CW) {
-    off = Math.round((depth - CW) / 2)
+  const hugX = p === 0 || p === 2
+  const depth = hugX ? H : W
+  const across = hugX ? W : H
+  // smallest room side with a band along the parent, and with a spine
+  const withBand = Math.min(depth - CW, across / n)
+  const twoSided = across >= 2 * 9 + CW
+  const withSpine = twoSided
+    ? Math.min((across - CW) / 2, depth / Math.ceil(n / 2))
+    : Math.min(across - CW, depth / n)
+  if (depth - CW >= 9 && depth - CW <= 16 && withBand >= withSpine - 0.5)
+    return band(hugX, (p === 0 || p === 3) ? 0 : depth - CW)
+  // the spine must end on a day room or a hall of the zones already laid out
+  const z0 = hugX ? zone.x0 : zone.y0
+  const edge = p === 0 ? zone.y0 : p === 2 ? zone.y1 : p === 3 ? zone.x0 : zone.x1
+  const meets = (off: number) => placed.some((q) => {
+    if (NIGHT_ITEMS.has(q.type))
+      return false
+    const touch = p === 0 ? q.y1 === edge : p === 2 ? q.y0 === edge : p === 3 ? q.x1 === edge : q.x0 === edge
+    const a0 = hugX ? q.x0 : q.y0
+    const a1 = hugX ? q.x1 : q.y1
+    return touch && a0 <= z0 + off && a1 >= z0 + off + CW
+  })
+  // rooms on both flanks if possible, the spine as central as it can be
+  const mid = Math.round((across - CW) / 2)
+  const offs: number[] = []
+  for (let o = 9; o + CW + 9 <= across; o++) offs.push(o)
+  offs.sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid))
+  offs.push(...(chance(r, 0.5) ? [0, across - CW] : [across - CW, 0]))
+  const off = offs.find(meets)
+  if (across >= 9 + CW && off !== undefined)
+    return band(!hugX, off)
+  return depth >= 9 + CW ? band(hugX, (p === 0 || p === 3) ? 0 : depth - CW) : null
+}
+
+// ---------------------------------------------------------------- day and night
+
+/**
+ * Room lists per zone. The main zone takes the day rooms, the wings the
+ * bedroom suite; the flexible rooms (wc, stair, study, storage, laundry)
+ * balance the areas. Bedrooms the wings cannot hold go back to the main zone,
+ * which then gets a night end of its own (see splitMixed).
+ */
+function assign(zones: Zone[], items: Item[]): Item[][] {
+  const core = items.filter(it => DAY_CORE.has(it.type))
+  const flex = items.filter(it => !DAY_CORE.has(it.type) && !NIGHT_ITEMS.has(it.type))
+  const night = items.filter(it => NIGHT_ITEMS.has(it.type))
+  if (zones.length === 1)
+    return [[...core, ...flex, ...night]]
+  const A = zones.map(area)
+  const At = A.reduce((s, a) => s + a, 0)
+  const Wt = weight(items)
+  const want0 = (Wt * A[0]) / At
+  const main = [...core]
+  const wings = [...night]
+  const back: Item[] = []
+  while (weight(wings) > (Wt - want0) * 1.1 && wings.some(it => it.type === 'bedroom')) {
+    const i = wings.map(it => it.type).lastIndexOf('bedroom')
+    back.unshift(wings.splice(i, 1)[0])
+  }
+  const wingFlex: Item[] = []
+  for (const it of flex) {
+    if (weight(main) + weight(back) + it.w / 2 <= want0)
+      main.push(it)
+    else
+      wingFlex.push(it)
+  }
+  return [[...main, ...back], ...spread([...wingFlex, ...wings], A.slice(1))]
+}
+
+/** End of a mixed zone (0: low, 1: high, along its long axis) closest to the other zones. */
+function nightSide(zn: Zone, zones: Zone[], r: Rng): 0 | 1 {
+  const alongX = wOf(zn) >= hOf(zn)
+  const mid = (q: Rect) => alongX ? (q.x0 + q.x1) / 2 : (q.y0 + q.y1) / 2
+  let s = 0
+  for (const o of zones) {
+    if (o !== zn)
+      s += (mid(o) - mid(zn)) * area(o)
+  }
+  if (Math.abs(s) > 1e-6)
+    return s > 0 ? 1 : 0
+  return chance(r, 0.5) ? 1 : 0
+}
+
+/** Splits a zone into a day part and a night end served by a hall. */
+function splitMixed(zn: Rect, list: Item[], end: 0 | 1, r: Rng): { day: Rect, night: Rect, hall: Piece[] } {
+  const CW = 4
+  const alongX = wOf(zn) >= hOf(zn)
+  const Lz = alongX ? wOf(zn) : hOf(zn)
+  const Hz = alongX ? hOf(zn) : wOf(zn)
+  const fn = weight(list.filter(it => NIGHT_ITEMS.has(it.type))) / weight(list)
+  const Ln = Math.max(10 + CW, Math.min(Lz - 14, Math.round(Lz * fn) + CW))
+  const a0 = alongX ? zn.x0 : zn.y0
+  const a1 = alongX ? zn.x1 : zn.y1
+  const b0 = alongX ? zn.y0 : zn.x0
+  const b1 = alongX ? zn.y1 : zn.x1
+  const mk = (u0: number, u1: number, v0 = b0, v1 = b1): Rect => alongX
+    ? { x0: u0, x1: u1, y0: v0, y1: v1 }
+    : { x0: v0, x1: v1, y0: u0, y1: u1 }
+  const cut = end ? a1 - Ln : a0 + Ln
+  const day = end ? mk(a0, cut) : mk(cut, a1)
+  const night = end ? mk(cut, a1) : mk(a0, cut)
+  let hall: Rect
+  if (Ln - CW <= 16 || Hz < 9 + CW) {
+    // a hall across the zone, along the day rooms
+    hall = end ? mk(cut, cut + CW) : mk(cut - CW, cut)
   }
   else {
-    off = chance(r, 0.5) ? 0 : depth - CW
+    // a spine down the night end, from the day rooms to the far wall
+    const off = Hz >= 2 * 9 + CW ? Math.round((Hz - CW) / 2) : (chance(r, 0.5) ? 0 : Hz - CW)
+    hall = end ? mk(cut, a1, b0 + off, b0 + off + CW) : mk(a0, cut, b0 + off, b0 + off + CW)
   }
-  if (alongX)
-    return { x0: zone.x0, x1: zone.x1, y0: zone.y0 + off, y1: zone.y0 + off + CW, type: 'corridor' }
-  return { x0: zone.x0 + off, x1: zone.x0 + off + CW, y0: zone.y0, y1: zone.y1, type: 'corridor' }
+  return { day, night, hall: [{ ...hall, type: 'corridor' }] }
+}
+
+/** Length of the edge `c` shares with side `side` of `s`. */
+function sharedRun(s: Rect, c: Rect, side: Side): number {
+  if ((side === 0 && c.y1 === s.y0) || (side === 2 && c.y0 === s.y1))
+    return Math.min(s.x1, c.x1) - Math.max(s.x0, c.x0)
+  if ((side === 3 && c.x1 === s.x0) || (side === 1 && c.x0 === s.x1))
+    return Math.min(s.y1, c.y1) - Math.max(s.y0, c.y0)
+  return 0
 }
 
 // ---------------------------------------------------------------- flats units
@@ -632,16 +789,20 @@ function flatUnits(strip: Rect, side: Side, r: Rng, nextGroup: () => number): Ar
     const u1 = i === n - 1 ? len : Math.round((len * (i + 1)) / n)
     const uw = u1 - u
     const g = nextGroup()
+    // the bedroom behind the bath needs 2.7 m of depth, else the flat is a studio
     const fd = Math.max(6, Math.min(dep - 9, Math.round(dep * range(r, 0.34, 0.42))))
+    const bedroom = uw >= 17 && dep - fd >= 9
     const bw = Math.max(6, Math.min(uw - 6, Math.round(uw * range(r, 0.4, 0.5))))
     const flip = chance(r, 0.5)
     const fa = flip ? u + bw : u
     const ba = flip ? u : u + uw - bw
     out.push({ ...local(strip, side, fa, fa + uw - bw, 0, fd), type: 'foyer', group: g })
     out.push({ ...local(strip, side, ba, ba + bw, 0, fd), type: 'bath', group: g })
-    if (uw >= 17) {
+    if (bedroom) {
       const dw = Math.max(9, Math.min(uw - 9, Math.round(uw * range(r, 0.4, 0.48))))
-      const flip2 = chance(r, 0.5)
+      // the living room stays on the foyer's side, so it opens off the foyer
+      chance(r, 0.5)
+      const flip2 = flip
       const la = flip2 ? u + dw : u
       const da = flip2 ? u : u + uw - dw
       out.push({ ...local(strip, side, la, la + uw - dw, fd, dep), type: 'flat', group: g })
@@ -778,6 +939,9 @@ function linkCost(a: Room, b: Room): number {
     return (has('corridor') || has('entry') || has('living')) ? 0.6 : 9
   if (CIRC.has(ta) || CIRC.has(tb))
     return both('entry', 'living') ? 0.8 : 1
+  // a bedroom never opens onto the day rooms when anything else will do
+  if ((has('bedroom') || has('master')) && (has('living') || has('kitchen') || has('dining')))
+    return 30
   if (has('living')) {
     if (has('kitchen') || has('dining'))
       return 1
@@ -832,9 +996,22 @@ export function buildPlan(fp: Footprint, prog: Program, rl: Rng, rd: Rng): Plan 
 
   if (flats) {
     for (const zn of zones) {
+      let strips = freeRects(zn, zn.fixed)
+      // a sliver beside the stair core widens the core instead of becoming a closet
+      strips = strips.filter((s) => {
+        if (Math.min(wOf(s), hOf(s)) >= 4)
+          return true
+        const f = zn.fixed.find(f => f.type !== 'corridor' && ((f.x1 === s.x0 || f.x0 === s.x1) ? f.y0 === s.y0 && f.y1 === s.y1 : (f.y1 === s.y0 || f.y0 === s.y1) && f.x0 === s.x0 && f.x1 === s.x1))
+        if (!f)
+          return true
+        f.x0 = Math.min(f.x0, s.x0)
+        f.y0 = Math.min(f.y0, s.y0)
+        f.x1 = Math.max(f.x1, s.x1)
+        f.y1 = Math.max(f.y1, s.y1)
+        return false
+      })
       for (const f of zn.fixed) pieces.push({ ...f, group: 0 })
       const cors = zn.fixed.filter(f => f.type !== 'lift' && f.type !== 'stair')
-      const strips = freeRects(zn, zn.fixed)
       // order strips along the slab so groups read left to right
       strips.sort((a, b) => (a.y0 - b.y0) || (a.x0 - b.x0))
       for (const s of strips) {
@@ -845,22 +1022,39 @@ export function buildPlan(fp: Footprint, prog: Program, rl: Rng, rd: Rng): Plan 
   }
   else {
     const items = program(prog, rl)
-    const groups = spread(items, zones.map(area))
+    const groups = assign(zones, items)
+    // a free rectangle lying along a corridor gets rooms that open onto it
+    const fill = (zn: Rect, fixed: Piece[], list: Item[]) => {
+      const free = freeRects(zn, fixed)
+      const parts = spread(list, free.map(area))
+      free.forEach((fr, i) => {
+        const cors = fixed.filter(f => f.type === 'corridor')
+        const access = cors.length ? corridorSide(fr, cors) : -1
+        const touches = access >= 0 && cors.some(c => sharedRun(fr, c, access) >= 4)
+        for (const p of partition(fr, parts[i], rl, touches ? access : -1)) pieces.push({ ...p, group: 0 })
+      })
+    }
     zones.forEach((zn, zi) => {
       const list = groups[zi]
-      const night = list.length >= 3 && !list.some(it => it.type === 'living')
-        && list.some(it => it.type === 'bedroom' || it.type === 'master')
-      if (night) {
-        const c = houseCorridor(zn, rl)
+      const isBed = (it: Item) => it.type === 'bedroom' || it.type === 'master'
+      if (list.some(it => it.type === 'living') && list.some(isBed)) {
+        // the day rooms and the bedrooms share this zone: the bedrooms take
+        // one end, behind a hall, so that none of them opens onto the living room
+        const nightEnd = nightSide(zn, zones, rl)
+        const { day, night, hall } = splitMixed(zn, list, nightEnd, rl)
+        for (const h of hall) pieces.push({ ...h, group: 0 })
+        for (const p of partition(day, list.filter(it => !NIGHT_ITEMS.has(it.type)), rl)) pieces.push({ ...p, group: 0 })
+        fill(night, hall, list.filter(it => NIGHT_ITEMS.has(it.type)))
+        return
+      }
+      const nightZone = !list.some(it => it.type === 'living') && list.some(isBed)
+      if (nightZone) {
+        const c = houseCorridor(zn, pieces, list.length, rl)
         if (c)
           zn.fixed.push(c)
       }
       for (const f of zn.fixed) pieces.push({ ...f, group: 0 })
-      const free = freeRects(zn, zn.fixed)
-      const parts = spread(list, free.map(area))
-      free.forEach((fr, i) => {
-        for (const p of partition(fr, parts[i], rl)) pieces.push({ ...p, group: 0 })
-      })
+      fill(zn, zn.fixed, list)
     })
   }
 
@@ -941,8 +1135,11 @@ export function buildPlan(fp: Footprint, prog: Program, rl: Rng, rd: Rng): Plan 
     }
   }
   const adj: number[][] = rooms.map(() => [])
+  // a hall end or a closet may be narrower than a usual doorway wall
+  const NARROW: ReadonlySet<RoomType> = new Set(['corridor', 'entry', 'foyer', 'storage', 'wc', 'dressing'])
+  const minRun = (s: { i: number, j: number }) => NARROW.has(rooms[s.i].type) || NARROW.has(rooms[s.j].type) ? 4 : 5
   for (const [pk, s] of shared) {
-    if (s.b - s.a >= 5) {
+    if (s.b - s.a >= minRun(s)) {
       adj[s.i].push(pk)
       adj[s.j].push(pk)
     }
@@ -994,13 +1191,49 @@ export function buildPlan(fp: Footprint, prog: Program, rl: Rng, rd: Rng): Plan 
   const openings: Opening[] = []
   const free = (o: 0 | 1, c: number, a: number, b: number, gap: number) =>
     !openings.some(p => p.o === o && p.c === c && p.a < b + gap && p.b > a - gap)
+  const hasDoor = new Set<number>()
+  /** A swing door in a shared wall, at the preferred end if it is free, else anywhere along it. */
+  const door = (s: { o: 0 | 1, c: number, a: number, b: number, i: number, j: number }, nearA: boolean, gap: number): boolean => {
+    const A = rooms[s.i]
+    const B = rooms[s.j]
+    const len = s.b - s.a
+    const w = Math.min(3, len - 0.8)
+    const t = thickness([s.i, s.j], rooms)
+    // the leaf swings into the more private room, if there is space for it
+    let into = RANK[A.type] >= RANK[B.type] ? A : B
+    const depthOf = (q: Room) => s.o === 0 ? hOf(q) : wOf(q)
+    if (depthOf(into) < 5)
+      into = into === A ? B : A
+    const tries: number[] = []
+    if (len >= w + 2.2) {
+      const lo = s.a + 1.1
+      const hi = s.b - 1.1 - w
+      tries.push(nearA ? lo : hi, nearA ? hi : lo)
+      for (let x = lo + 0.5; x < hi; x += 0.5) tries.push(x)
+    }
+    else {
+      tries.push(s.a + (len - w) / 2)
+    }
+    const a = tries.find(x => free(s.o, s.c, x, x + w, gap))
+    if (a === undefined)
+      return false
+    const dir: 1 | -1 = s.o === 0 ? (into.y0 >= s.c ? 1 : -1) : (into.x0 >= s.c ? 1 : -1)
+    const hinge = a - s.a <= s.b - a - w ? 0 : 1
+    openings.push({ o: s.o, c: s.c, a, b: a + w, kind: 'door', t, into: into.id, dir, hinge })
+    hasDoor.add(s.i)
+    hasDoor.add(s.j)
+    return true
+  }
 
   for (const pk of links) {
     const s = shared.get(pk)!
     const A = rooms[s.i]
     const B = rooms[s.j]
-    if (OPEN_PAIR(A, B))
+    if (OPEN_PAIR(A, B)) {
+      hasDoor.add(s.i)
+      hasDoor.add(s.j)
       continue
+    }
     const len = s.b - s.a
     const t = thickness([s.i, s.j], rooms)
     const pass = isPass(A.type, B.type) || (A.type === 'lift' || B.type === 'lift')
@@ -1009,20 +1242,26 @@ export function buildPlan(fp: Footprint, prog: Program, rl: Rng, rd: Rng): Plan 
       const w = lift ? 3 : Math.min(len - 2.4, Math.round(range(rd, 6, 12)))
       const a = s.a + 1.2 + (len - 2.4 - w) * (lift ? 0.5 : range(rd, 0.2, 0.8))
       openings.push({ o: s.o, c: s.c, a, b: a + w, kind: lift ? 'lift' : 'pass', t, into: -1, dir: 1, hinge: 0 })
+      hasDoor.add(s.i)
+      hasDoor.add(s.j)
       continue
     }
-    // the leaf swings into the more private room, if there is space for it
-    let into = RANK[A.type] >= RANK[B.type] ? A : B
-    const depthOf = (q: Room) => s.o === 0 ? hOf(q) : wOf(q)
-    if (depthOf(into) < 5)
-      into = into === A ? B : A
-    const w = 3
-    const nearA = chance(rd, 0.5)
-    const a = nearA ? s.a + 1.1 : s.b - 1.1 - w
-    if (!free(s.o, s.c, a, a + w, 0.6))
+    door(s, chance(rd, 0.5), 0.6)
+  }
+  // any room still without a door (a closet behind a narrow wall, a door
+  // pushed out by another one) gets one through its best remaining wall
+  for (const q of rooms) {
+    if (hasDoor.has(q.id))
       continue
-    const dir: 1 | -1 = s.o === 0 ? (into.y0 >= s.c ? 1 : -1) : (into.x0 >= s.c ? 1 : -1)
-    openings.push({ o: s.o, c: s.c, a, b: a + w, kind: 'door', t, into: into.id, dir, hinge: nearA ? 0 : 1 })
+    const cands = [...shared.values()]
+      .filter(s => (s.i === q.id || s.j === q.id) && s.b - s.a >= 3)
+      .filter(s => rooms[s.i].group === rooms[s.j].group || linkCost(rooms[s.i], rooms[s.j]) < Infinity)
+      .filter(s => !(rooms[s.i].type === 'lift' || rooms[s.j].type === 'lift'))
+      .sort((p, r) => linkCost(rooms[p.i], rooms[p.j]) - linkCost(rooms[r.i], rooms[r.j]) || (r.b - r.a) - (p.b - p.a))
+    for (const s of cands) {
+      if (door(s, true, 0.15))
+        break
+    }
   }
 
   const sideLine = (q: Room, sd: Side): [0 | 1, number] =>

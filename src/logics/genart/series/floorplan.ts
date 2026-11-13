@@ -9,21 +9,26 @@
 // graph; windows sit on the exterior runs. The plan is then drafted: wall
 // poché, door swings, glazing, stairs, furniture symbols, tiled wet rooms,
 // dimension chains with slashed ticks, a north arrow, a scale bar and a title
-// block whose lettering is only dashes. See ../floorplan/.
+// block whose lettering is only dashes. The rest of the sheet holds other
+// drawings of the same building at the same scale (front and side
+// elevations, a cross-section, a room schedule), chosen so that no canvas
+// ratio leaves an empty band. See ../floorplan/.
 //
 // Everything is a pure function of the hash. Plan geometry is in 0.3 m cells
 // and the whole drawing is scaled to the canvas short side, so a hash gives
-// the same sheet at any size; on a portrait canvas a wide plan is turned a
-// quarter turn (and the north arrow with it).
+// the same sheet at any size; the layout (and a quarter turn of the plan,
+// north arrow included) depends only on the canvas ratio.
 
 import type { Pal, Poche } from '../floorplan/draw'
 import type { Piece } from '../floorplan/furnish'
 import type { Footprint, Program, Rect } from '../floorplan/plan'
+import type { Ink } from '../floorplan/sheet'
 import type { Rng } from '../random'
 import type { Series } from '../types'
-import { dashes, dimChain, northArrow, openings, paving, roomLabel, scaleBar, stairs, terrace, tiles, titleBlock, tree, walls, zoning } from '../floorplan/draw'
+import { dashes, dimChain, northArrow, openings, paving, roomLabel, scaleBar, stairs, terrace, tiles, titleBlock, tree, walls, zoneColor, zoning } from '../floorplan/draw'
 import { drawPiece, furnish } from '../floorplan/furnish'
 import { buildPlan } from '../floorplan/plan'
+import { caption, chooseLayout, elevation, elevationHeight, masses, massing, schedule, scheduleSize, section } from '../floorplan/sheet'
 import { chance, range, stream, weighted } from '../random'
 
 // Rarity table, decided before the drawing code. Never reorder: it re-rolls the edition.
@@ -90,16 +95,16 @@ const PAL: Record<Features['Palette'], Pal> = {
   },
   // graphite and white pencil on brown kraft paper
   Kraft: {
-    bg: '#c9a677',
-    bg2: '#b08b5b',
-    ink: '#221c17',
-    poche: '#2a231d',
-    door: '#221c17',
-    furn: '#352b22',
-    dim: '#43372c',
-    accent: '#f6eedf',
-    tile: 'rgba(40, 30, 20, 0.2)',
-    glass: '#f6eedf',
+    bg: '#d4b384',
+    bg2: '#bf9b6c',
+    ink: '#140f0b',
+    poche: '#1a140f',
+    door: '#140f0b',
+    furn: '#271e16',
+    dim: '#33281d',
+    accent: '#fdf7ea',
+    tile: 'rgba(30, 20, 10, 0.28)',
+    glass: '#fdf7ea',
     grid: null,
     grid2: null,
     day: 'rgba(246, 238, 223, 0.32)',
@@ -149,7 +154,7 @@ function paper(g: CanvasRenderingContext2D, W: number, H: number, S: number, pal
       const x = r() * W
       const y = r() * H
       const s = P * range(r, 0.6, 2.2)
-      g.fillStyle = r() < 0.6 ? 'rgba(70, 50, 30, 0.22)' : 'rgba(250, 240, 220, 0.28)'
+      g.fillStyle = r() < 0.6 ? 'rgba(70, 50, 30, 0.16)' : 'rgba(250, 240, 220, 0.24)'
       g.fillRect(x, y, s, s)
     }
   }
@@ -157,7 +162,7 @@ function paper(g: CanvasRenderingContext2D, W: number, H: number, S: number, pal
     // fibres
     const n = Math.round((pal.kind === 'kraft' ? 420 : 260) * area)
     g.lineWidth = P * 0.7
-    g.strokeStyle = pal.kind === 'kraft' ? 'rgba(80, 55, 30, 0.16)' : 'rgba(90, 80, 60, 0.07)'
+    g.strokeStyle = pal.kind === 'kraft' ? 'rgba(80, 55, 30, 0.12)' : 'rgba(90, 80, 60, 0.07)'
     g.beginPath()
     for (let i = 0; i < n; i++) {
       const x = r() * W
@@ -202,7 +207,11 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
   const plan = buildPlan(f.Footprint as Footprint, f.Program as Program, rl, rd)
   const schematic = f.Detail === 'Schematic'
   const construction = f.Detail === 'Construction'
+  const flats = f.Program === 'Flats'
   const pieces: Piece[] = schematic ? [] : furnish(plan, rf)
+  // the building in three dimensions, for the elevations and the section
+  const mass = massing(plan, flats, construction, stream(hash, 'sheet'))
+  const vols = masses(plan.zones)
 
   // annotation choices, in a fixed order
   const mirX = chance(ra, 0.5)
@@ -236,7 +245,7 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
   const ew = X1 - X0
   const eh = Y1 - Y0
 
-  // sheet layout in pixels
+  // sheet layout in pixels: the plan, and the other drawings that fill the sheet
   const fi = 0.035 * S
   const bh = 0.08 * S
   const pad = 0.025 * S
@@ -244,10 +253,17 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
   const ay0 = fi + pad
   const aw = W - 2 * (fi + pad)
   const ah = H - 2 * fi - bh - 1.5 * pad
-  const k0 = Math.min(aw / ew, ah / eh)
-  const k1 = Math.min(aw / eh, ah / ew)
-  const rot = k1 > k0 * 1.12 ? 1 : 0
-  const k = Math.max(k0, k1 * rot)
+  const lay = chooseLayout({
+    area: { x: ax0, y: ay0, w: aw, h: ah },
+    ew,
+    eh,
+    bw: b.x1 - b.x0,
+    bh: b.y1 - b.y0,
+    elevH: elevationHeight(vols, mass),
+    schedule: scheduleSize(plan, flats),
+    row: mass.row,
+  })
+  const { rot, k } = lay
   const mx = mirX ? -1 : 1
   const my = mirY ? -1 : 1
 
@@ -255,13 +271,15 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
 
   const toPlan = () => {
     g.setTransform(1, 0, 0, 1, 0, 0)
-    g.translate(ax0 + aw / 2, ay0 + ah / 2)
+    g.translate(lay.plan.x + lay.plan.w / 2, lay.plan.y + lay.plan.h / 2)
     g.rotate((rot * Math.PI) / 2)
     g.scale(k * mx, k * my)
     g.translate(-(X0 + X1) / 2, -(Y0 + Y1) / 2)
   }
   toPlan()
-  const u = (px: number) => (px * P) / k // pen width in plan units
+  // kraft takes a heavier pen: mid-tone paper eats thin lines
+  const heavy = pal.kind === 'kraft' ? 1.35 : 1
+  const u = (px: number) => (px * P * heavy) / k // pen width in plan units
   g.lineCap = 'butt'
   g.lineJoin = 'round'
 
@@ -372,7 +390,7 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
   for (const p of pieces) drawPiece(g, p, pens)
 
   stairs(g, plan, pal, u(0.9), u(0.55))
-  walls(g, plan, pal, f.Poché as Poche, u(pal.kind === 'kraft' ? 1.3 : 1.15), u(0.5))
+  walls(g, plan, pal, f.Poché as Poche, u(pal.kind === 'kraft' ? 1.4 : 1.15), u(pal.kind === 'kraft' ? 0.6 : 0.5))
   openings(g, plan, pal, { door: u(1.1), arc: u(0.55), fine: u(0.6), glass: u(0.7) })
 
   // room "names": dashes, clear of the furniture
@@ -426,14 +444,53 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
     dimChain(g, sd, { pos, from }, base + out * near, overall, base + out * far, pal, { fine: u(0.5), tick: u(1.1) }, ra)
   }
 
-  // section marks
+  // section marks: the construction cuts, and the cut drawn in the section panel
+  const cutAt = (o: 0 | 1, t: number) => {
+    const lo = o === 0 ? b.y0 : b.x0
+    const hi = o === 0 ? b.y1 : b.x1
+    const pref = Math.round(lo + (hi - lo) * (0.25 + 0.5 * t)) + 0.5
+    // never along a wall running the same way
+    for (let d = 0; d < hi - lo; d++) {
+      for (const c of [pref + d, pref - d]) {
+        if (c > lo + 1 && c < hi - 1 && !plan.walls.some(w => w.o === o && Math.abs(w.c - c) < w.t / 2 + 0.3))
+          return c
+      }
+    }
+    return pref
+  }
+  const cuts: Array<[0 | 1, number]> = []
   if (construction) {
-    const cuts: Array<[0 | 1, number]> = [[0, Math.round(b.y0 + (b.y1 - b.y0) * (0.25 + 0.5 * sectionAt)) + 0.5]]
+    cuts.push([0, cutAt(0, sectionAt)])
     if (sectionV)
-      cuts.push([1, Math.round(b.x0 + (b.x1 - b.x0) * (0.25 + 0.5 * sectionAt2)) + 0.5])
+      cuts.push([1, cutAt(1, sectionAt2)])
+  }
+  let secCut: [0 | 1, number] | null = null
+  if (lay.panels.some(p => p.kind === 'section')) {
+    // the cut that runs across the sheet, so the section lines up under the plan
+    const o: 0 | 1 = rot ? 1 : 0
+    // through the widest part of the building, near the chosen place if it is wide enough
+    const width = (c: number) => plan.zones.reduce((w, z) => {
+      const [lo, hi] = o === 0 ? [z.y0, z.y1] : [z.x0, z.x1]
+      return c > lo && c < hi ? w + (o === 0 ? z.x1 - z.x0 : z.y1 - z.y0) : w
+    }, 0)
+    const ts = [o ? sectionAt2 : sectionAt]
+    for (let t = -0.4; t <= 1.4; t += 0.1) ts.push(t)
+    const cs = ts.map(t => cutAt(o, Math.max(-0.45, Math.min(1.45, t))))
+    const most = Math.max(...cs.map(width))
+    const pick = cs.find(c => width(c) >= most * 0.92)!
+    secCut = cuts.find(c => c[0] === o && width(c[1]) >= most * 0.92) ?? [o, pick]
+    if (!cuts.includes(secCut))
+      cuts.push(secCut)
+  }
+  {
     g.strokeStyle = pal.accent
     g.fillStyle = pal.accent
-    for (const [o, c] of cuts) {
+    for (const cutLine of cuts) {
+      const [o, c] = cutLine
+      // the section panel looks towards the top of the sheet: so do its arrows
+      const Mt = g.getTransform()
+      const up = o === 0 ? -Mt.d : -Mt.b
+      const av = cutLine === secCut && up > 0 ? 1.6 : -1.6
       const a = (o === 0 ? E.x0 : E.y0) - 4
       const z = (o === 0 ? E.x1 : E.y1) + 4
       const P2 = (s: number, v: number): [number, number] => o === 0 ? [s, c + v] : [c + v, s]
@@ -454,7 +511,7 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
         g.beginPath()
         g.moveTo(...P2(end + dir * 0.3, 0))
         g.lineTo(...P2(end + dir * 2.3, 0))
-        g.lineTo(...P2(end + dir * 1.3, -1.6))
+        g.lineTo(...P2(end + dir * 1.3, av))
         g.closePath()
         g.fill()
       }
@@ -477,8 +534,35 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
 
   // ---- sheet, in pixels
   const M = g.getTransform()
+  const Pk = P * heavy
   g.setTransform(1, 0, 0, 1, 0, 0)
   g.lineCap = 'butt'
+
+  // the other drawings of the sheet, each in plan units at the plan's scale
+  const ink: Ink = { pal, pen: px => (px * P * heavy) / k, rng: stream(hash, 'panels'), shade: pal.kind === 'vellum' || pal.kind === 'kraft' }
+  for (const pn of lay.panels) {
+    g.setTransform(k, 0, 0, k, pn.box.x, pn.box.y)
+    if (pn.kind === 'front' || pn.kind === 'side')
+      elevation(g, { plan, ms: vols, M, k, view: pn.kind, box: pn.box, m: mass, ink })
+    else if (pn.kind === 'section' && secCut)
+      section(g, { plan, ms: vols, M, k, box: pn.box, m: mass, ink, poche: f.Poché as Poche, cut: secCut })
+    else if (pn.kind === 'schedule')
+      schedule(g, plan, flats, schematic, f.Poché as Poche, t => zoneColor(t, pal), ink)
+  }
+  if (lay.caption) {
+    const c = lay.caption
+    let left = Infinity
+    let right = -Infinity
+    for (const [x, y] of [[b.x0, b.y0], [b.x1, b.y0], [b.x0, b.y1], [b.x1, b.y1]]) {
+      const sx = M.a * x + M.c * y + M.e
+      left = Math.min(left, sx)
+      right = Math.max(right, sx)
+    }
+    g.setTransform(k, 0, 0, k, c.x, c.y)
+    caption(g, (left - c.x) / k, c.h / k / 2, ink, Math.min(14, (right - left) / k * 0.35))
+  }
+  g.setTransform(1, 0, 0, 1, 0, 0)
+  g.lineJoin = 'round'
   if (pal.kind === 'cad') {
     // crosshair cursor and a pick box, as on a live CAD screen
     const cx = ax0 + aw * (0.15 + 0.7 * cursor[0])
@@ -498,11 +582,11 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
   }
   else {
     g.strokeStyle = pal.ink
-    g.lineWidth = P * 0.7
+    g.lineWidth = Pk * 0.7
     g.strokeRect(fi * 0.62, fi * 0.62, W - fi * 1.24, H - fi * 1.24)
-    g.lineWidth = P * 2.2
+    g.lineWidth = Pk * 2.2
     g.strokeRect(fi, fi, W - 2 * fi, H - 2 * fi)
-    g.lineWidth = P * 0.8
+    g.lineWidth = Pk * 0.8
     g.beginPath()
     g.moveTo(fi, H - fi - bh)
     g.lineTo(W - fi, H - fi - bh)
@@ -517,11 +601,11 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
   const nang = Math.atan2(sxv, -syv)
   const by = H - fi - bh / 2
   const nr = 0.021 * S
-  northArrow(g, fi + 0.025 * S + nr, by + nr * 0.12, nr, nang, pal, P * 1.1)
+  northArrow(g, fi + 0.025 * S + nr, by + nr * 0.12, nr, nang, pal, Pk * 1.1)
   // scale bar: five metres at the plan scale
   const metre = k / 0.3
   const sbx = fi + 0.025 * S + nr * 2 + 0.03 * S
-  scaleBar(g, sbx, by - P * 4, metre, P * 8, pal, P * 0.8)
+  scaleBar(g, sbx, by - P * 4, metre, P * 8, pal, Pk * 0.8)
   const tbw = Math.min(0.42 * S, (W - 2 * fi) * 0.46)
   const tbh = bh * 0.72
   if (pal.kind === 'cad') {
@@ -542,7 +626,7 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
     g.restore()
   }
   else {
-    titleBlock(g, W - fi - tbw - 0.012 * S, by - tbh / 2, tbw, tbh, pal, P * 0.8, ra)
+    titleBlock(g, W - fi - tbw - 0.012 * S, by - tbh / 2, tbw, tbh, pal, Pk * 0.8, ra)
   }
   g.globalAlpha = 1
 }
@@ -550,7 +634,7 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
 export default {
   slug: 'floorplan',
   title: 'Floorplan',
-  summary: 'Architectural plans of houses and flats that were never built: rooms carved by treemaps, door swings, wall poché and dimension chains, on vellum, blueprint, kraft or a CAD screen.',
+  summary: 'Architectural plans of houses and flats that were never built: rooms carved by treemaps, door swings, wall poché and dimension chains, with elevations and sections filling the sheet, on vellum, blueprint, kraft or a CAD screen.',
   order: 640,
   traits: TRAITS,
   features,

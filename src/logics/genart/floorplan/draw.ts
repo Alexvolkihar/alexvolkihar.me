@@ -42,17 +42,22 @@ function seg(g: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1
 const DAY: ReadonlySet<RoomType> = new Set(['living', 'kitchen', 'dining', 'study', 'flat'])
 const NIGHT: ReadonlySet<RoomType> = new Set(['bedroom', 'master', 'dressing'])
 
+/** Zoning colour of a room type: day, night or wet (null for circulation). */
+export function zoneColor(t: RoomType, pal: Pal): string | null {
+  if (isWet(t) && t !== 'kitchen')
+    return pal.wet
+  if (DAY.has(t))
+    return pal.day
+  if (NIGHT.has(t))
+    return pal.night
+  return null
+}
+
 /** Zoning wash for schematic plans: day, night, wet and circulation. */
 export function zoning(g: CanvasRenderingContext2D, plan: Plan, pal: Pal) {
   for (const q of plan.rooms) {
     const n = plan.inner[q.id]
-    let c: string | null = null
-    if (isWet(q.type) && q.type !== 'kitchen')
-      c = pal.wet
-    else if (DAY.has(q.type))
-      c = pal.day
-    else if (NIGHT.has(q.type))
-      c = pal.night
+    const c = zoneColor(q.type, pal)
     if (!c)
       continue
     g.fillStyle = c
@@ -101,6 +106,13 @@ export function walls(g: CanvasRenderingContext2D, plan: Plan, pal: Pal, poche: 
   g.stroke(p)
   g.fillStyle = poche === 'Solid' ? pal.poche : pal.bg
   g.fill(p)
+  if (poche !== 'Solid' && pal.kind === 'kraft') {
+    // white pencil inside the cut walls, as drafters do on brown paper
+    g.globalAlpha = 0.5
+    g.fillStyle = pal.accent
+    g.fill(p)
+    g.globalAlpha = 1
+  }
   if (poche === 'Hatched') {
     g.save()
     g.clip(p)
