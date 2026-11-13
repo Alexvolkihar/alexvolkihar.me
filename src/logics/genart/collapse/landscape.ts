@@ -380,6 +380,21 @@ export function drawLandscape(g: CanvasRenderingContext2D, G: Grid, pal: Palette
         houses.push([p.x + sx(p) * u * s, p.y + sy(p) * v * s, ph(p, 220 + q) < 0.5])
     })
   }
+  // A planned town: house blocks fill the streets' plain cells.
+  for (const o of G.ornaments ?? []) {
+    if (o.kind !== 'town')
+      continue
+    for (const p of cells) {
+      if (p.groups.length || !p.corners.every(c => c === GRASS) || Math.abs(p.x - o.x) > o.w / 2 || Math.abs(p.y - o.y) > o.h / 2)
+        continue
+      const qs = [[-0.24, -0.24], [0.24, -0.24], [0.24, 0.24], [-0.24, 0.24]]
+      qs.forEach(([u, v], q) => {
+        if (ph(p, 230 + q) < 0.8)
+          houses.push([p.x + sx(p) * u * s, p.y + sy(p) * v * s, ph(p, 240 + q) < 0.5])
+      })
+    }
+  }
+
   const roofA = pal.a1
   const roofB = mix(pal.a1, pal.ink, 0.3)
   for (const [x, y, turn] of houses) {
@@ -398,4 +413,202 @@ export function drawLandscape(g: CanvasRenderingContext2D, G: Grid, pal: Palette
     g.lineWidth = 0.012 * s
     g.strokeRect(x - hw, y - hh, hw * 2, hh * 2)
   }
+
+  drawOrnaments(g, G, pal)
+}
+
+/**
+ * The details of a planned landscape: broderie on the lawns, clipped trees,
+ * statues, fountains and the keep of a town (the house blocks are laid with
+ * the other houses). Every ornament is symmetric about its own centre, and the
+ * plans place them in mirrored pairs, so a mirrored piece stays mirrored.
+ */
+function drawOrnaments(g: CanvasRenderingContext2D, G: Grid, pal: Palette): void {
+  const { s } = G
+  const list = G.ornaments ?? []
+  const hedge = mix(pal.forest, pal.ink, 0.2)
+  const shadow = mix(pal.grass, pal.ink, 0.55)
+  g.lineCap = 'round'
+  g.lineJoin = 'round'
+
+  for (const o of list) {
+    const { x, y } = o
+    const r = Math.min(o.w, o.h) / 2
+    if (o.kind === 'broderie') {
+      broderie(g, x, y, o.w / 2, o.h / 2, o.v, s, hedge, pal)
+    }
+    else if (o.kind === 'topiary') {
+      g.fillStyle = shadow
+      g.globalAlpha = 0.5
+      g.beginPath()
+      g.arc(x + 0.25 * r, y + 0.3 * r, r, 0, Math.PI * 2)
+      g.fill()
+      g.globalAlpha = 1
+      g.beginPath()
+      g.arc(x, y, r, 0, Math.PI * 2)
+      g.fillStyle = mix(pal.forest, pal.grass, 0.2)
+      g.fill()
+      g.strokeStyle = mix(pal.forest, pal.ink, 0.6)
+      g.lineWidth = 0.1 * r
+      g.stroke()
+      g.beginPath()
+      g.arc(x - 0.3 * r, y - 0.3 * r, 0.35 * r, 0, Math.PI * 2)
+      g.fillStyle = mix(pal.forest, pal.grass, 0.75)
+      g.fill()
+    }
+    else if (o.kind === 'statue') {
+      g.fillStyle = shadow
+      g.globalAlpha = 0.5
+      g.fillRect(x - r + 0.25 * r, y - r + 0.3 * r, 2 * r, 2 * r)
+      g.globalAlpha = 1
+      g.fillStyle = mix(pal.sand, pal.paper, 0.4)
+      g.fillRect(x - r, y - r, 2 * r, 2 * r)
+      g.strokeStyle = pal.ink
+      g.lineWidth = 0.1 * r
+      g.strokeRect(x - r, y - r, 2 * r, 2 * r)
+      g.beginPath()
+      g.arc(x, y, 0.5 * r, 0, Math.PI * 2)
+      g.fillStyle = mix(pal.ink, pal.sand, 0.35)
+      g.fill()
+    }
+    else if (o.kind === 'fountain') {
+      // ripples, a stone basin and the jet
+      g.strokeStyle = mix(pal.shallow, pal.paper, 0.55)
+      g.lineWidth = 0.035 * s
+      for (const k of [1, 0.72]) {
+        g.globalAlpha = k === 1 ? 0.45 : 0.75
+        g.beginPath()
+        g.arc(x, y, r * k, 0, Math.PI * 2)
+        g.stroke()
+      }
+      g.globalAlpha = 1
+      g.beginPath()
+      g.arc(x, y, Math.min(0.45 * r, 0.22 * s), 0, Math.PI * 2)
+      g.fillStyle = mix(pal.sand, pal.paper, 0.4)
+      g.fill()
+      g.strokeStyle = pal.ink
+      g.lineWidth = 0.025 * s
+      g.stroke()
+      g.beginPath()
+      g.arc(x, y, Math.min(0.2 * r, 0.1 * s), 0, Math.PI * 2)
+      g.fillStyle = mix(pal.shallow, '#ffffff', 0.6)
+      g.fill()
+    }
+    else if (o.kind === 'keep') {
+      keep(g, x, y, r, o.v, s, pal)
+    }
+  }
+}
+
+/** A clipped-hedge pattern on a lawn, four-fold symmetric about its centre. */
+function broderie(g: CanvasRenderingContext2D, x: number, y: number, hw: number, hh: number, v: number, s: number, hedge: string, pal: Palette): void {
+  const a = Math.min(hw, hh)
+  g.save()
+  g.translate(x, y)
+  // a hedge along the edge of the lawn
+  g.strokeStyle = hedge
+  g.lineWidth = 0.075 * s
+  const e = a * 0.86
+  g.beginPath()
+  g.roundRect(-e, -e, 2 * e, 2 * e, 0.25 * e)
+  g.stroke()
+  g.lineWidth = 0.055 * s
+  g.beginPath()
+  for (let q = 0; q < 4; q++) {
+    g.save()
+    g.rotate(q * Math.PI / 2)
+    if (v === 0) {
+      // fleurons: a scroll curling out of each side
+      g.moveTo(0, -0.1 * a)
+      g.bezierCurveTo(0.35 * a, -0.15 * a, 0.45 * a, -0.55 * a, 0.18 * a, -0.6 * a)
+      g.bezierCurveTo(0.02 * a, -0.62 * a, 0.02 * a, -0.42 * a, 0.16 * a, -0.42 * a)
+      g.moveTo(0, -0.1 * a)
+      g.bezierCurveTo(-0.35 * a, -0.15 * a, -0.45 * a, -0.55 * a, -0.18 * a, -0.6 * a)
+      g.bezierCurveTo(-0.02 * a, -0.62 * a, -0.02 * a, -0.42 * a, -0.16 * a, -0.42 * a)
+    }
+    else if (v === 1) {
+      // a lozenge with loops on its corners
+      g.moveTo(0, -0.62 * a)
+      g.lineTo(0.62 * a, 0)
+      g.moveTo(0.1 * a, -0.62 * a)
+      g.arc(0, -0.62 * a, 0.1 * a, 0, Math.PI * 2)
+    }
+    else if (v === 2) {
+      // four rings overlapping round the middle
+      g.moveTo(0.28 * a + 0.3 * a, -0.28 * a)
+      g.arc(0.28 * a, -0.28 * a, 0.3 * a, 0, Math.PI * 2)
+    }
+    else {
+      // S-curves running from the corners to the middle
+      g.moveTo(0.62 * a, -0.62 * a)
+      g.bezierCurveTo(0.2 * a, -0.62 * a, 0.5 * a, -0.15 * a, 0.12 * a, -0.12 * a)
+    }
+    g.restore()
+  }
+  g.stroke()
+  // a flower bed or a clipped tree in the middle
+  g.beginPath()
+  g.arc(0, 0, 0.12 * a, 0, Math.PI * 2)
+  g.fillStyle = v % 2 ? pal.a1 : mix(pal.forest, pal.grass, 0.3)
+  g.fill()
+  g.strokeStyle = mix(pal.forest, pal.ink, 0.5)
+  g.lineWidth = 0.02 * s
+  g.stroke()
+  g.restore()
+}
+
+/** The keep of a town: a square or a round tower with battlements. */
+function keep(g: CanvasRenderingContext2D, x: number, y: number, r: number, v: number, s: number, pal: Palette): void {
+  const wall = mix(pal.sand, pal.paper, 0.35)
+  const path = (k: number) => {
+    g.beginPath()
+    if (v === 0)
+      g.rect(x - k, y - k, 2 * k, 2 * k)
+    else
+      g.arc(x, y, k, 0, Math.PI * 2)
+  }
+  g.globalAlpha = 0.5
+  g.fillStyle = mix(pal.grass, pal.ink, 0.55)
+  g.save()
+  g.translate(0.18 * r, 0.22 * r)
+  path(r)
+  g.fill()
+  g.restore()
+  g.globalAlpha = 1
+  path(r)
+  g.fillStyle = wall
+  g.fill()
+  g.strokeStyle = pal.ink
+  g.lineWidth = 0.03 * s
+  g.stroke()
+  // battlements: merlons round the top of the wall
+  const n = v === 0 ? 4 : 10
+  g.fillStyle = mix(wall, pal.ink, 0.35)
+  for (let k = 0; k < (v === 0 ? 4 * n : n); k++) {
+    let mx: number
+    let my: number
+    if (v === 0) {
+      const side = Math.floor(k / n)
+      const t = ((k % n) + 0.5) / n * 2 - 1
+      const pts = [[t, -1], [1, t], [-t, 1], [-1, -t]][side]
+      mx = x + pts[0] * r * 0.86
+      my = y + pts[1] * r * 0.86
+    }
+    else {
+      const a = k / n * Math.PI * 2
+      mx = x + Math.cos(a) * r * 0.86
+      my = y + Math.sin(a) * r * 0.86
+    }
+    g.fillRect(mx - 0.07 * r, my - 0.07 * r, 0.14 * r, 0.14 * r)
+  }
+  // the roof of the tower
+  path(r * 0.55)
+  g.fillStyle = pal.a1
+  g.fill()
+  g.strokeStyle = pal.ink
+  g.lineWidth = 0.02 * s
+  g.stroke()
+  path(r * 0.2)
+  g.fillStyle = mix(pal.a1, pal.ink, 0.35)
+  g.fill()
 }

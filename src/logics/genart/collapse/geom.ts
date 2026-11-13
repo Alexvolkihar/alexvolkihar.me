@@ -47,6 +47,22 @@ export interface Grid {
   H: number
   /** Mirror axes (vertical, horizontal) of a symmetric piece, if any. */
   mirror?: readonly [boolean, boolean]
+  /** Garden and town details laid over a planned landscape. */
+  ornaments?: Ornament[]
+}
+
+/**
+ * A detail drawn over a planned landscape: a fountain, a statue, a clipped
+ * tree, a keep, a broderie pattern on a lawn, or the house blocks of a town.
+ * Centre (x, y) and size (w, h) are in canvas pixels; v picks a variant.
+ */
+export interface Ornament {
+  kind: 'fountain' | 'statue' | 'topiary' | 'keep' | 'broderie' | 'town'
+  x: number
+  y: number
+  w: number
+  h: number
+  v: number
 }
 
 type RGB = [number, number, number]

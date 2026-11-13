@@ -16,8 +16,11 @@ function t(name: string, corners: Quad, weight: number, feats: Quad = [0, 0, 0, 
   return { name, corners, feats, groups: edges.length ? [{ edges, kind }] : [], weight }
 }
 
-export function dungeonBases(density: string): BaseTile[] {
-  const [rock, room, corr] = density === 'Sparse' ? [2.2, 2.4, 2.4] : density === 'Dense' ? [1.8, 6, 1] : [3, 4, 1.2]
+export function dungeonBases(density: string, symmetric = false): BaseTile[] {
+  // A mirrored plan only solves half the grid against a closed border, so a
+  // balanced one gets more rooms and corridors than a free one.
+  const balanced = symmetric ? [2.2, 4.4, 1.8] : [3, 4, 1.2]
+  const [rock, room, corr] = density === 'Sparse' ? [2.2, 2.4, 2.4] : density === 'Dense' ? [1.8, 6, 1] : balanced
   return [
     t('rock', ROCK, rock),
     t('room', ROOM, room),

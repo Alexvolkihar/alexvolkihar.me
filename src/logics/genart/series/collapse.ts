@@ -73,12 +73,19 @@ const PAL: Record<Features['Palette'], Palette> = {
   Indigo: { bg: '#121f42', paper: '#192b57', ink: '#e9eef7', deep: '#0d1835', shallow: '#26467f', sand: '#e2d8bc', grass: '#a9bab1', forest: '#4b6c72', a1: '#f2c14e', a2: '#e8775a', dark: true },
 }
 
+// Landscape colours that replace a palette's own: Indigo's pale grass and
+// blue-grey woods washed the maps out, so its landscapes get a green field,
+// a deep green wood and brighter water.
+const LAND: Partial<Record<Features['Palette'], Partial<Palette>>> = {
+  Indigo: { grass: '#7fa58a', forest: '#2d5e55', shallow: '#3667ab', sand: '#ecdcaa' },
+}
+
 // ---------------------------------------------------------------------------
 // Worlds.
 // ---------------------------------------------------------------------------
 
 interface World {
-  bases: (density: Features['Density']) => BaseTile[]
+  bases: (density: Features['Density'], symmetric: boolean) => BaseTile[]
   /** The grid border is closed: no feature crosses it. */
   closed: boolean
   /** Rug layout: the grid sits inside a margin and a border. */
@@ -96,11 +103,11 @@ const WORLDS: Record<Features['World'], World> = {
 const CELLS: Record<Features['Grid'], number> = { Coarse: 10, Medium: 16, Fine: 24 }
 
 const setCache = new Map<string, TileSet>()
-function tileSet(world: Features['World'], density: Features['Density']): TileSet {
-  const key = `${world}/${density}`
+function tileSet(world: Features['World'], density: Features['Density'], symmetric: boolean): TileSet {
+  const key = `${world}/${density}/${symmetric}`
   let set = setCache.get(key)
   if (!set) {
-    set = buildSet(expand(WORLDS[world].bases(density)))
+    set = buildSet(expand(WORLDS[world].bases(density, symmetric)))
     setCache.set(key, set)
   }
   return set
@@ -142,7 +149,7 @@ function build(hash: string, W: number, H: number) {
   // Solved region: the whole grid, its left half or its top-left quarter.
   const rc = f.Symmetry === 'Free' ? cols : cols / 2
   const rr = f.Symmetry === 'Kaleidoscope' ? rows / 2 : rows
-  const set = tileSet(f.World, f.Density)
+  const set = tileSet(f.World, f.Density, f.Symmetry !== 'Free')
   const { tiles, n, words } = set
   const cells = rc * rr
   const base = new Uint32Array(cells * words)
@@ -166,16 +173,22 @@ function build(hash: string, W: number, H: number) {
   for (const t of tiles)
     weight[t.id] = t.weight
 
-  // Landscape guide: favour the tiles whose corners lie close to a seeded
-  // relief sampled at those corners. The local rules still decide the
-  // coasts, beaches, rivers and roads; the relief only shapes the continents.
-  let mult: Float64Array | undefined
-  let cls: Uint16Array | undefined
-  if (f.World === 'Landscape') {
-    // A symmetric landscape follows a designed plan (../collapse/plan.ts);
-    // a free one follows a seeded relief.
-    const plan = f.Symmetry === 'Free' ? undefined : landscapePlan(f.Symmetry, N / 2, stream(hash, 'plan'))
-    const guide = landscapeGuide(f.Density, guideSeed, valueNoise(guideSeed))
+  // Landscape guide: favour the tiles whose corners lie close to a target
+  // terrain sampled at those corners. The local rules still decide the
+  // coasts, beaches, rivers and roads. A symmetric landscape follows a
+  // designed plan (../collapse/plan.ts); a free one follows a seeded relief,
+  // which only shapes the continents.
+  const plan = f.World === 'Landscape' && f.Symmetry !== 'Free' ? landscapePlan(f.Symmetry, N / 2, stream(hash, 'plan')) : undefined
+  const cls = f.World === 'Landscape' ? new Uint16Array(n).map((_, t) => t) : undefined
+
+  /**
+   * Landscape guide: per-cell multipliers favouring the planned terrain, and
+   * a solving order that settles the high ground first and lets it run down
+   * to the sea.
+   */
+  function landscapeWeights(seed: number, shift = 0, roads = 1): { mult: Float64Array, order: Float64Array } {
+    const relief = landscapeGuide(f.Density, seed, valueNoise(seed))
+    const guide = (u: number, v: number) => relief(u, v) + shift
     const lattice = new Float64Array((rc + 1) * (rr + 1))
     for (let j = 0; j <= rr; j++) {
       for (let i = 0; i <= rc; i++) {
@@ -186,26 +199,75 @@ function build(hash: string, W: number, H: number) {
     if (plan)
       legalize(lattice, rc + 1, rr + 1)
     const sigma = plan ? plan.sigma : 0.8
-    mult = new Float64Array(cells * n)
-    cls = new Uint16Array(n).map((_, t) => t)
+    const mult = new Float64Array(cells * n)
+    const o = order.slice()
     const at = [[0, 0], [1, 0], [1, 1], [0, 1]]
     for (let j = 0; j < rr; j++) {
       for (let i = 0; i < rc; i++) {
         const c = j * rc + i
         const d = at.map(([a, b]) => lattice[(j + b) * (rc + 1) + i + a])
-        order[c] -= 0.05 * (d[0] + d[1] + d[2] + d[3])
+        o[c] -= 0.05 * (d[0] + d[1] + d[2] + d[3])
         for (const t of tiles) {
           let dev = 0
           for (let k = 0; k < 4; k++)
             dev += (t.corners[k] - d[k]) ** 2
-          const fw = plan && t.groups.length ? plan.feature(i - cols / 2 + 0.5, j - rows / 2 + 0.5, t) : 1
+          const fw = t.groups.length ? (plan ? plan.feature(i - cols / 2 + 0.5, j - rows / 2 + 0.5, t) : roads) : 1
           mult[c * n + t.id] = fw * Math.exp(-dev / (2 * sigma * sigma)) + 1e-6
         }
       }
     }
+    return { mult, order: o }
   }
 
-  const { grid } = solve({ set, cols: rc, rows: rr, base, weight, mult, cls, classes: n, priority: world.rug ? undefined : priority, order }, rng)
+  /**
+   * 0 for a varied central square, above 0 the further from it; and whether
+   * its land outweighs its water.
+   */
+  function dullness(g: Int32Array): { score: number, high: boolean } {
+    const count = [0, 0, 0, 0, 0]
+    let total = 0
+    for (let c = 0; c < cells; c++) {
+      if (!priority[c])
+        continue
+      const t = tiles[g[c]]
+      count[Math.round((t.corners[0] + t.corners[1] + t.corners[2] + t.corners[3]) / 4)]++
+      total++
+    }
+    const shares = count.map(k => k / total)
+    const kinds = shares.filter(x => x >= 0.06).length
+    const score = Math.max(0, Math.max(...shares) - 0.6) + Math.max(0, shares[4] - 0.2) + Math.max(0, 3 - kinds) * 0.1
+    return { score, high: shares[3] + shares[4] > shares[0] + shares[1] }
+  }
+
+  // A coarse free landscape has few cells, so it can come out as one block of
+  // terrain. When its central square is more than 60 % one terrain or 20 %
+  // forest, or has fewer than three terrains worth 6 % each, it is solved
+  // again from a fresh relief, up to three times, keeping the most varied
+  // result. The test only reads the central square, which is solved first,
+  // so the choice is the same on any canvas.
+  let grid = new Int32Array(0)
+  let best = Infinity
+  let shift = 0
+  const attempts = f.World === 'Landscape' && !plan && f.Grid === 'Coarse' ? 4 : 1
+  for (let k = 0; k < attempts; k++) {
+    // each retry: a fresh relief, lowered or raised towards the missing
+    // terrain, and rivers and roads made more likely
+    const seed = k === 0 ? guideSeed : Math.floor(phash(guideSeed, k, 7) * 4294967296) | 0
+    const lw = f.World === 'Landscape' ? landscapeWeights(seed, shift, k === 0 ? 1 : 2) : undefined
+    const run = solve({ set, cols: rc, rows: rr, base, weight, mult: lw?.mult, cls, classes: n, priority: world.rug ? undefined : priority, order: lw?.order ?? order }, k === 0 ? rng : stream(hash, `solve${k}`))
+    if (attempts === 1) {
+      grid = run.grid
+      break
+    }
+    const d = dullness(run.grid)
+    if (d.score < best) {
+      best = d.score
+      grid = run.grid
+    }
+    if (d.score <= 0)
+      break
+    shift += d.high ? -0.3 : 0.3
+  }
 
   // Lay the full grid, reflecting the solved region.
   const placed: Placed[] = []
@@ -223,7 +285,9 @@ function build(hash: string, W: number, H: number) {
     }
   }
 
-  const G: Grid = { cols, rows, s, x0, y0, cells: placed, S, W, H, mirror: [rc < cols, rr < rows] }
+  // The plan's ornaments, from cells to pixels.
+  const ornaments = plan?.ornaments.map(o => ({ ...o, x: W / 2 + o.x * s, y: H / 2 + o.y * s, w: o.w * s, h: o.h * s }))
+  const G: Grid = { cols, rows, s, x0, y0, cells: placed, S, W, H, mirror: [rc < cols, rr < rows], ornaments }
   return { f, world, G, decorSeed }
 }
 
@@ -256,7 +320,7 @@ export function gridStats(hash: string): { dominant: number, features: number } 
 
 function render(ctx: CanvasRenderingContext2D, W: number, H: number, hash: string): void {
   const { f, world, G, decorSeed } = build(hash, W, H)
-  const pal = PAL[f.Palette]
+  const pal = f.World === 'Landscape' ? { ...PAL[f.Palette], ...LAND[f.Palette] } : PAL[f.Palette]
   const S = Math.min(W, H)
   ctx.save()
   ctx.setTransform(1, 0, 0, 1, 0, 0)
@@ -300,20 +364,21 @@ export default {
   // found. Candidates are skipped when they are Coarse + Sparse, when their
   // solved grid is more than half one class of tile, or when edge features
   // cover fewer than 3 % of the cells (gridStats). The cover, the first
-  // landscape in Atlas, is then moved first. The picks were made before the
-  // symmetric landscapes got their plans and the sparse dungeons and pipes
-  // were filled out; the hashes were kept and checked again by eye. Two of
-  // them no longer pass the measures as they stand: 0x75dd..., now a canal
-  // plan with no river or road, and 0x9825..., whose plate is 55 % empty.
+  // landscape in Atlas, is then moved first. Two picks stopped passing those
+  // rules once the symmetric landscapes got their plans and the sparse
+  // pipes were filled out, and were replaced from seed-of-seeds 0xc011a95f
+  // ("gallery" stream): the first passing hash with the same world, palette
+  // and symmetry (a Nocturne landscape in Mirror, a Verdigris pipework in
+  // Kaleidoscope).
   gallery: [
     '0x95e049f3bc09dcceb722ff7aec0591bd33eb8cf2657e769b963be52021a07ba8',
     '0x4f283411091ebb84ff76c0eac8575203fddc66c3da84d3b326110adb6c9bbdd8',
     '0x0f899d9ee09c6540cfa0c97cc84b3c30e98f2711b3d0755e0adbcc30ec362b5f',
     '0x8a5e5bea0175bec9a3dfa982f7622d1b7617ea559c633a77b20fd3507bfab7ee',
     '0x341af83ca3ea96e55aef2b9900e7e22d6defb36ee4a39576a7c60f08f9ee2d41',
-    '0x75ddd34d457acc49f252f48cb5dc13f132dc1acd54418ecfdb10ff8aac968acd',
+    '0xca768829d26e18221402783f299d303ac4cde750043caa628f39bb591fad0936',
     '0x38ff937372ecf445883756802d0d7a70a2457ae73fae45cfcdf77082b648715f',
-    '0x9825ae30f7f8387cb8282461b0530712276d625cf8865f14674c1cdb7205e80c',
+    '0xa692d2ce81ae401352642b0c41d0b0193ea6005f45d9b6c181558d4679852d8a',
     '0x98b8de0cdd4198d6bb6dbdea13eecb17527ae12fe568a2d399cf74b3e85b8696',
     '0x737c466bbaf95375b662f4b291187eb143a2ff8b35cb9532e42fc979b801b1fb',
     '0x2139a703e03a733675c79c0d5dd8d3407d19b6da166c22a0c9fa1de8e1963184',
