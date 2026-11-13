@@ -28,7 +28,7 @@ art: dots
 ### Gaming
 
 - Steam Deck LCD 512GB / Steam Deck OLED 1TB
-- PS Vita Henkaku Moded 256gb 
+- PS Vita Henkaku Moded 256gb
 - NVIDIA GeForce NOW Ultimate
 
 ## Development
@@ -36,11 +36,8 @@ art: dots
 ### Editor
 
 - Editor: [VS Code](https://code.visualstudio.com/) (trying [Cursor](https://www.cursor.com/) right now)
-- VS Code Settings & Extensions: [antfu/vscode-settings](https://github.com/antfu/vscode-settings)
 - Fonts: [Input Mono](https://input.djr.com/)
-- Theme: [Vitesse Theme](https://github.com/antfu/vscode-theme-vitesse)
 - Icons Theme: [Catppuccin Icons](https://marketplace.visualstudio.com/items?itemName=Catppuccin.catppuccin-vsc-icons)
-- Product Icons: [Carbon Icons](https://github.com/antfu/vscode-icons-carbon)
 - Formatting & Linting: [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) with [`@antfu/eslint-config`](https://github.com/antfu/eslint-config)
 
 ### AI
@@ -85,31 +82,17 @@ Firefox developper edition & Safari
 
 - [Figma](https://www.figma.com/) - Illustrations, Logos, Social Media Banners
 - [OBS](https://obsproject.com/) - Streaming & Recording
-- [`broz`](https://github.com/antfu/broz) - Frameless browser for screenshots
 - [DaVinci Resolve](https://www.blackmagicdesign.com/products/davinciresolve) - Video Editing
 - [Affinity Photo](https://affinity.serif.com/photo) - Photo Editing
 
 ### CLI
 
 - [`zsh`](https://zsh.org/) - Shell
-  - Config: [antfu/dotfiles](https://github.com/antfu/dotfiles)
 - [`pnpm`](https://pnpm.io/) - Preferred package managers, also for monorepo
-- [`ni`](https://github.com/antfu/ni) - Aliasing package managers
-- [`taze`](https://github.com/antfu/taze) - Upgrade dependencies
-- [`bumpp`](https://github.com/antfu/bumpp) - Bump package version version for new release
 - [`tsx`](https://github.com/privatenumber/tsx) - Run TypeScript files without compilation
 - [`eslint`](https://eslint.org/) - Linter & Formatter
   - Config: [antfu/eslint-config](https://github.com/antfu/eslint-config)
-  - [Why I don't use Prettier](https://antfu.me/posts/why-not-prettier)
 - Build Tools for Libraries
   - [`tsdown`](https://github.com/rolldown/tsdown) - Easy to use
   - [`unbuild`](https://github.com/unjs/unbuild) - Most of the time
   - [`rollup`](https://rollupjs.org/) - For very fine-grained control
-
-### Starter Templates
-
-- [`starter-ts`](https://github.com/antfu/starter-ts) - TypeScript starter template
-- [`vitesse-nuxt`](https://github.com/antfu/vitesse-nuxt) - Opinionated Nuxt starter template
-- [`vitesse-lite`](https://github.com/antfu/vitesse-lite) - Lite version of Vitesse
-- [`vitesse`](https://github.com/antfu/vitesse) - Opinionated Vite + Vue starter template
-- [`starter-vscode`](https://github.com/antfu/starter-vscode) - VS Code Extension starter template

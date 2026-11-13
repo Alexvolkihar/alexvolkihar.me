@@ -1,7 +1,7 @@
 import dayjs from 'dayjs'
 
 export const isDark = useDark()
-export const englishOnly = useLocalStorage('antfu-english-only', false)
+export const englishOnly = useLocalStorage('alexvolkihar-english-only', false)
 /**
  * Whether the visitor's browser lists `lang` among its languages. Only used as the default
  * before the visitor makes a choice: English plus the browser's language. True during the
@@ -14,8 +14,8 @@ function browserWants(lang: string): boolean {
   return langs.some(l => l?.toLowerCase().split('-')[0] === lang)
 }
 
-export const showFrenchPosts = useLocalStorage('antfu-show-french-posts', browserWants('fr'))
-export const showJapanesePosts = useLocalStorage('antfu-show-japanese-posts', browserWants('ja'))
+export const showFrenchPosts = useLocalStorage('alexvolkihar-show-french-posts', browserWants('fr'))
+export const showJapanesePosts = useLocalStorage('alexvolkihar-show-japanese-posts', browserWants('ja'))
 /**
  * Show or hide the French/Japanese posts. Leaving "English Only" from a
  * language box shows English plus that language only, as the boxes displayed.
@@ -33,7 +33,7 @@ export function toggleLanguagePosts(lang: 'fr' | 'ja') {
   }
 }
 
-export const galleryView = useLocalStorage<'cover' | 'contain'>('antfu-gallery-view', 'cover')
+export const galleryView = useLocalStorage<'cover' | 'contain'>('alexvolkihar-gallery-view', 'cover')
 
 /**
  * Credit to [@hooray](https://github.com/hooray)

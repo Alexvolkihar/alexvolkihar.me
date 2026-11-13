@@ -44,14 +44,10 @@ const { y: scroll } = useWindowScroll()
         <RouterLink to="/talks" class="lt-md:hidden" title="Talks">
           Talks
         </RouterLink>
-                <RouterLink to="/use" title="Use">
+        <RouterLink to="/use" title="Use">
           <span class="lt-md:hidden">Use</span>
           <div i-ri-tools-line class="md:hidden" />
         </RouterLink>
-        <!-- <RouterLink to="/sponsors-list" title="Sponsors">
-          <span class="lt-md:hidden">Sponsors</span>
-          <div i-ri-heart-line class="md:hidden" />
-        </RouterLink> -->
         <RouterLink to="/podcasts" class="lt-md:hidden" title="Podcasts">
           <div i-ri-mic-line />
         </RouterLink>
@@ -65,12 +61,6 @@ const { y: scroll } = useWindowScroll()
         <RouterLink to="/genart" title="Generative Art">
           <div i-ri-shape-line />
         </RouterLink>
-        <!-- <RouterLink to="/chat" title="Let's Chat">
-          <div i-ri-chat-1-line />
-        </RouterLink> -->
-        <!-- <a href="https://bsky.app/profile/antfu.me" target="_blank" title="Bluesky" class="lt-md:hidden">
-          <div i-ri-bluesky-line />
-        </a> -->
         <a href="https://github.com/alexvolkihar" target="_blank" title="GitHub" class="lt-md:hidden">
           <div i-uil-github-alt />
         </a>

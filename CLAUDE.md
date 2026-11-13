@@ -11,10 +11,9 @@ Personal website/blog (fork of antfu.me), built with Vue 3 + Vite + Vite-SSG as 
 ```bash
 pnpm install       # install deps (pnpm@11.5.0, workspace catalogs in pnpm-workspace.yaml)
 pnpm dev           # start dev server on :3333
-pnpm build         # full production build: static assets + vite-ssg build + fonts + rss + redirects
+pnpm build         # full production build: vite-ssg build + fonts + rss + redirects
 pnpm preview       # preview the production build locally
 pnpm lint          # eslint .
-pnpm static        # refresh temp/ from antfu/static (degit) + copy sponsor assets
 ```
 
 There is no test suite/runner configured in this repo — do not invent test commands.
@@ -50,11 +49,10 @@ There is no test suite/runner configured in this repo — do not invent test com
 Standalone `tsx`-run utilities invoked from `package.json` or ad hoc:
 - `rss.ts` — builds `feed.xml`/`feed.atom`/`feed.json` from `pages/posts/*.md`.
 - `redirects.ts` — merges `_redirects` into `_dist_redirects`, adding dynamic GitHub-repo redirects via Octokit (needs `GITHUB_TOKEN`).
-- `copy-fonts.ts`, `copy-sponsors.ts` — copy static assets into the build during `pnpm build` / `pnpm static`.
+- `copy-fonts.ts` — copies the fonts into the build during `pnpm build`.
 - `img-compress*.ts` — image compression CLI and a staged-files variant (used by git hooks/manual runs).
 - `photos-manage.ts` — manages `photos/` metadata JSON consumed by `pages/photos.md`.
 - `slugify.ts` — diacritics-aware slug helper shared by the markdown anchor/TOC plugins.
-- `sponsors-circles.ts` — generates the sponsor-avatar layout data consumed by `src/components/SponsorsCircles.vue`.
 - `stars-rank.ts` — generates GitHub star-ranking data for display.
 
 ### Deployment
