@@ -24,8 +24,13 @@ export interface GrowParams {
   /** Child width / parent width. */
   ratio: number
   wMin: number
-  /** Birth angle sampler (radians, positive). */
-  angle: (r: Rng) => number
+  /**
+   * Heading of a child born on `side` (+1 left of the heading, -1 right) of a
+   * parent heading `a`. It must turn towards that side.
+   */
+  heading: (r: Rng, a: number, side: number) => number
+  /** Distance an agent walks before its first branch. */
+  trunk: number
   /** Drift: rotation rate (rad per unit length) in the half plane n·(p - c) > 0. */
   drift: { cx: number, cy: number, nx: number, ny: number, rate: number }
   /** Orbit: curvature k / distance to the centre. */
@@ -64,6 +69,16 @@ interface Agent {
   arm: number
   turn: number
   turnRate: number
+}
+
+/** Signed turn from heading b to heading a, in (-pi, pi]. */
+export function turn(a: number, b: number) {
+  let d = (a - b) % (Math.PI * 2)
+  if (d > Math.PI)
+    d -= Math.PI * 2
+  if (d <= -Math.PI)
+    d += Math.PI * 2
+  return d
 }
 
 const STEP = 0.003
@@ -209,7 +224,7 @@ export class World {
       a,
       w,
       traveled: 0,
-      nextBirth: w * range(r, 0.8, 2.4),
+      nextBirth: Math.max(this.p.trunk, w * range(r, 0.8, 2.4)),
       anchor: a,
       arm: range(r, 0.1, 0.45),
       turn: 0,
@@ -295,13 +310,14 @@ export class World {
       return
     }
     const side = r() < 0.5 ? -1 : 1
-    const th = p.angle(r)
+    const h = p.heading(r, ag.a, side)
+    const th = Math.abs(turn(h, ag.a))
     const ca = Math.abs(Math.cos(th))
     const off = Math.max(0, ag.w / 2 - (wc / 2) * ca - 0.15 * wc)
     const x = ag.x - Math.sin(ag.a) * side * off
     const y = ag.y + Math.cos(ag.a) * side * off
     const grace = (ag.w / 2 - off + wc / 2 + 2.5 * p.gap) / Math.max(0.35, Math.sin(th)) + STEP * 2
-    const ok = this.spawn(ag.rb.id, level, x, y, ag.a + side * th, wc, grace, grace + Math.max(2.5 * wc, 0.06))
+    const ok = this.spawn(ag.rb.id, level, x, y, h, wc, grace, grace + Math.max(2.5 * wc, 0.06))
     if (ok)
       ag.nextBirth = ag.traveled + (ag.w + wc) * range(r, 1.1, 3.2)
     else
@@ -326,6 +342,32 @@ export class World {
   }
 
   /**
+   * Drop the stubs: ribbons shorter than a few widths that carry no branch.
+   * Their room stays empty, as a gap rather than a crumb.
+   */
+  prune() {
+    const kids = new Map<number, number>()
+    for (const rb of this.ribbons)
+      kids.set(rb.parent, (kids.get(rb.parent) ?? 0) + 1)
+    const dead = new Set<number>()
+    const byDepth = this.ribbons.filter(rb => rb.level >= 0).sort((a, b) => b.level - a.level)
+    for (const rb of byDepth) {
+      if (kids.get(rb.id))
+        continue
+      let len = 0
+      for (let i = 1; i < rb.xs.length; i++)
+        len += Math.hypot(rb.xs[i] - rb.xs[i - 1], rb.ys[i] - rb.ys[i - 1])
+      if (len < Math.max(2.5 * rb.w, 0.045)) {
+        dead.add(rb.id)
+        kids.set(rb.parent, (kids.get(rb.parent) ?? 1) - 1)
+      }
+    }
+    const keep = this.ribbons.filter(rb => !dead.has(rb.id))
+    this.ribbons.length = 0
+    this.ribbons.push(...keep)
+  }
+
+  /**
    * Fill pass: try to start new branches from random points along existing
    * ribbons, so the empty rooms left by the first growth get furnished.
    */
@@ -345,10 +387,11 @@ export class World {
       const a = rb.hs[j + 1]
       const wc = rb.w * p.ratio * range(r, 0.85, 1.1)
       const side = r() < 0.5 ? -1 : 1
-      const th = p.angle(r)
+      const h = p.heading(r, a, side)
+      const th = Math.abs(turn(h, a))
       const off = Math.max(0, rb.w / 2 - (wc / 2) * Math.abs(Math.cos(th)) - 0.15 * wc)
       const grace = (rb.w / 2 - off + wc / 2 + 2.5 * p.gap) / Math.max(0.35, Math.sin(th)) + STEP * 2
-      this.spawn(rb.id, rb.level + 1, x0 - Math.sin(a) * side * off, y0 + Math.cos(a) * side * off, a + side * th, wc, grace, grace + Math.max(3 * wc, 0.08))
+      this.spawn(rb.id, rb.level + 1, x0 - Math.sin(a) * side * off, y0 + Math.cos(a) * side * off, h, wc, grace, grace + Math.max(3 * wc, 0.08))
     }
   }
 }

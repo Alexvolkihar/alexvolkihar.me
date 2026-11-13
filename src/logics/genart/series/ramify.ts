@@ -15,7 +15,7 @@ import type { Disc, GrowParams, Ribbon, Rule } from '../ramify/grow'
 import type { Rng } from '../random'
 import type { Series } from '../types'
 import { hatch, outline, stipple, tracePolygon } from '../ramify/draw'
-import { World } from '../ramify/grow'
+import { turn, World } from '../ramify/grow'
 import { int, pick, range, stream, weighted } from '../random'
 
 // Rarity table, decided before the drawing code. Never reorder: it re-rolls the edition.
@@ -50,24 +50,40 @@ interface Palette {
   accent: string
   accent2: string
   grain: string
+  /** The void circle and its inner ring: always a light disc. */
+  void: string
+  voidRing: string
 }
 
 const PAL: Record<Features['Palette'], Palette> = {
-  Chalk: { bg: '#f2efe7', paper: '#fbfaf5', ink: '#2a2b2d', hatch: '#3b3c3f', accent: '#d2412b', accent2: '#ec8a37', grain: '#a9a293' },
-  Lagoon: { bg: '#edebe2', paper: '#f9f8f2', ink: '#163c42', hatch: '#245f63', accent: '#e4672c', accent2: '#f0b13c', grain: '#a7ada2' },
-  Kiln: { bg: '#e2703a', paper: '#f6efe2', ink: '#2a2320', hatch: '#2f2724', accent: '#1d5059', accent2: '#c7322a', grain: '#9c4219' },
-  Graphite: { bg: '#18191c', paper: '#232529', ink: '#e8e3d7', hatch: '#cdc7ba', accent: '#e4532d', accent2: '#4a9a95', grain: '#4a4c52' },
-  Indigo: { bg: '#ebe4d3', paper: '#f7f2e7', ink: '#21305b', hatch: '#2d3f72', accent: '#d8961c', accent2: '#b8432a', grain: '#b3a68b' },
+  Chalk: { bg: '#f2efe7', paper: '#fbfaf5', ink: '#2a2b2d', hatch: '#3b3c3f', accent: '#d2412b', accent2: '#ec8a37', grain: '#a9a293', void: '#fbfaf5', voidRing: '#2a2b2d' },
+  Lagoon: { bg: '#edebe2', paper: '#f9f8f2', ink: '#163c42', hatch: '#245f63', accent: '#e4672c', accent2: '#f0b13c', grain: '#a7ada2', void: '#f9f8f2', voidRing: '#163c42' },
+  Kiln: { bg: '#e2703a', paper: '#f6efe2', ink: '#2a2320', hatch: '#2f2724', accent: '#1d5059', accent2: '#c7322a', grain: '#9c4219', void: '#f6efe2', voidRing: '#2a2320' },
+  Graphite: { bg: '#18191c', paper: '#232529', ink: '#e8e3d7', hatch: '#cdc7ba', accent: '#e4532d', accent2: '#4a9a95', grain: '#4a4c52', void: '#ece6d8', voidRing: '#18191c' },
+  Indigo: { bg: '#ebe4d3', paper: '#f7f2e7', ink: '#21305b', hatch: '#2d3f72', accent: '#d8961c', accent2: '#b8432a', grain: '#b3a68b', void: '#f7f2e7', voidRing: '#21305b' },
 }
 
 // Birth angle quantum: Square and Oblique keep every heading on a lattice of
-// multiples of one angle (chosen per piece), Splay draws a fresh angle per child.
+// multiples of one angle (chosen per piece). Splay draws a fresh angle per
+// child, then snaps the heading to a finer fan of directions shared by the
+// whole piece (30° or 22.5° apart), so the splayed branches still line up.
 function birthQuantum(b: Features['Branching'], lr: Rng) {
   if (b === 'Square')
     return Math.PI / 2
   if (b === 'Oblique')
     return lr() < 0.5 ? Math.PI / 4 : Math.PI / 3
   return 0
+}
+
+function splayHeading(fan: number, base: number) {
+  return (r: Rng, a: number, side: number) => {
+    const want = a + side * range(r, 0.45, 1.5)
+    let h = base + Math.round((want - base) / fan) * fan
+    // at least most of one fan step towards the chosen side
+    while (side * turn(h, a) < fan * 0.75)
+      h += side * fan
+    return h
+  }
 }
 
 const MARGIN = 0.045
@@ -89,8 +105,11 @@ function build(f: Features, A: number, B: number, hash: string): Built {
   const gap = range(lr, 0.0065, 0.0095)
   const w0 = range(lr, 0.05, 0.072)
   const q = birthQuantum(f.Branching, lr)
+  const fan = q ? 0 : (lr() < 0.5 ? Math.PI / 6 : Math.PI / 8)
   // heading jitter of the roots: none to speak of on a lattice
-  const jit = q ? 0.012 : 0.15
+  const jit = 0.012
+  // the lattice is aligned with the canvas edges
+  const lattice = f.Layout === 'Colonnade' ? -Math.PI / 2 : 0
   const p: GrowParams = {
     A,
     B,
@@ -100,7 +119,8 @@ function build(f: Features, A: number, B: number, hash: string): Built {
     maxLevel: int(lr, 2, 4),
     ratio: range(lr, 0.5, 0.64),
     wMin: 0.007,
-    angle: q ? () => q : r => range(r, 0.45, 1.5),
+    heading: q ? (_r, a, side) => a + side * q : splayHeading(fan, lattice),
+    trunk: q ? 0 : 0.1,
     drift: { cx, cy, nx: 0, ny: 0, rate: 0 },
     orbit: { cx, cy, k: 0 },
   }
@@ -174,37 +194,72 @@ function build(f: Features, A: number, B: number, hash: string): Built {
       break
     }
     case 'Hubs': {
-      const lat = lr() * Math.PI
-      const n = Math.max(2, Math.round(int(lr, 3, 5) * Math.sqrt(A * B)))
-      const pts: number[] = []
-      for (let i = 0; i < n; i++) {
-        let x = 0
-        let y = 0
-        let ok = false
-        for (let t = 0; t < 30 && !ok; t++) {
-          x = range(lr, 0.2, A - 0.2)
-          y = range(lr, 0.2, B - 0.2)
-          ok = true
-          for (let j = 0; j < pts.length; j += 2) {
-            if (Math.hypot(pts[j] - x, pts[j + 1] - y) < 0.27)
-              ok = false
-          }
+      // hubs on a grid (or a single axis along the long side), linked by
+      // hatched beams; roots leave the hubs and the flanks of the beams
+      const axis = lr() < 0.35
+      const pitch = range(lr, 0.3, 0.42)
+      const inset = 0.22
+      const cols = Math.max(2, Math.floor((A - 2 * inset) / pitch) + 1)
+      const rows = axis ? 1 : Math.max(1, Math.floor((B - 2 * inset) / pitch) + 1)
+      const tall = axis && B > A
+      const nu = tall ? 1 : cols
+      const nv = tall ? Math.max(2, Math.floor((B - 2 * inset) / pitch) + 1) : rows
+      const hr = w0 * range(lr, 0.85, 1.05)
+      const bw = w0 * range(lr, 0.55, 0.7)
+      const grid: Disc[][] = []
+      for (let i = 0; i < nu; i++) {
+        grid.push([])
+        for (let j = 0; j < nv; j++) {
+          const x = nu > 1 ? inset + (A - 2 * inset) * i / (nu - 1) : cx
+          const y = nv > 1 ? inset + (B - 2 * inset) * j / (nv - 1) : cy
+          const d = world.addDisc(x, y, hr)
+          hubs.push(d)
+          grid[i].push(d)
         }
-        if (!ok)
-          continue
-        pts.push(x, y)
-        const hr = w0 * range(lr, 0.75, 1.05)
-        const d = world.addDisc(x, y, hr)
-        hubs.push(d)
-        const k = int(lr, 3, 4)
-        const a0 = lr() * Math.PI * 2
-        // on a lattice, the spokes leave at multiples of the quantum from a shared base
-        const spoke = q ? Math.max(1, Math.round(Math.PI * 2 / k / q)) * q : Math.PI * 2 / k
-        const base = q ? lat : a0
+      }
+      const beams: Ribbon[] = []
+      const link = (a: Disc, b: Disc) => {
+        const t = Math.atan2(b.y - a.y, b.x - a.x)
+        const c = Math.cos(t) * hr * 0.5
+        const s = Math.sin(t) * hr * 0.5
+        beams.push(world.addBar(a.x + c, a.y + s, b.x - c, b.y - s, bw))
+      }
+      for (let i = 0; i < nu; i++) {
+        for (let j = 0; j < nv; j++) {
+          // along a single axis every link is kept; on a grid some are missing
+          if (i + 1 < nu && (nv === 1 || lr() < 0.75))
+            link(grid[i][j], grid[i + 1][j])
+          if (j + 1 < nv && (nu === 1 || lr() < 0.75))
+            link(grid[i][j], grid[i][j + 1])
+        }
+      }
+      // spokes on the lattice; a spoke into a beam fails its probe and is skipped
+      const spoke = q || Math.PI / 4
+      const k = Math.round(Math.PI * 2 / spoke)
+      for (const d of hubs) {
         for (let j = 0; j < k; j++) {
-          const t = base + j * spoke + range(lr, -jit, jit) * (q ? 1 : 2)
+          // the four axial spokes are always tried, the diagonals now and then
+          const axial = Math.abs(Math.sin(2 * j * spoke)) < 1e-6
+          if (lr() < 0.45 && !axial)
+            continue
+          const t = j * spoke + range(lr, -jit, jit)
           const w = w0 * range(lr, 0.6, 0.85)
-          root(d.id, x + Math.cos(t) * hr * 0.6, y + Math.sin(t) * hr * 0.6, t, w, hr + w + 3 * gap)
+          root(d.id, d.x + Math.cos(t) * hr * 0.6, d.y + Math.sin(t) * hr * 0.6, t, w, hr + w + 3 * gap)
+        }
+      }
+      for (const bm of beams) {
+        const h = bm.hs[0]
+        const len = Math.hypot(bm.xs[1] - bm.xs[0], bm.ys[1] - bm.ys[0])
+        for (const side of [-1, 1]) {
+          const count = lr() < 0.5 ? 1 : 2
+          for (let i = 0; i < count; i++) {
+            const u = len * (i + 0.5 + range(lr, -0.15, 0.15)) / count
+            const t = h + side * (q || Math.PI / 2)
+            const x = bm.xs[0] + Math.cos(h) * u - Math.sin(h) * side * bw * 0.3
+            const y = bm.ys[0] + Math.sin(h) * u + Math.cos(h) * side * bw * 0.3
+            const w = w0 * range(lr, 0.55, 0.75)
+            root(bm.id, x, y, t, w, (bw + w + 3 * gap) / Math.max(0.5, Math.abs(Math.sin(t - h))))
+          }
         }
       }
       break
@@ -214,6 +269,7 @@ function build(f: Features, A: number, B: number, hash: string): Built {
   world.grow(90000)
   world.sprout(Math.round(240 * A * B))
   world.grow(150000)
+  world.prune()
   return { world, voids, hubs }
 }
 
@@ -340,9 +396,10 @@ function render(g: CanvasRenderingContext2D, W: number, H: number, hash: string)
       drawRibbon(rb)
   }
   for (const d of voids) {
-    discOutline(d, pal.paper)
+    discOutline(d, pal.void)
     // an inner ring keeps the void from reading as a hole in the paper
     g.globalAlpha = 0.5
+    g.strokeStyle = pal.voidRing
     g.lineWidth = lw
     g.beginPath()
     g.arc(d.x * S, d.y * S, (d.r - 0.012) * S, 0, Math.PI * 2)
@@ -388,9 +445,9 @@ export default {
   features,
   render,
   // Seed-of-seeds 0x7a41f1ed ("gallery" stream, 64-hex candidates): the first
-  // hash found for each Layout x Palette pair, in the order found, skipping one
-  // weak piece (a sparse Indigo hub layout), except that the second (a Lagoon
-  // colonnade of arches) is moved first to serve as the cover.
+  // hash found for each Layout x Palette pair, in the order found, skipping
+  // one weak piece (a tangled Kiln frame of orbits), except that the second
+  // (a Lagoon colonnade of arches) is moved first to serve as the cover.
   gallery: [
     '0x477d661762250a8ee1a3a342a91e88c554743db38f21c20c5b3a53309ca18411',
     '0xb71d3220c7ff82ee93cc6a299222efcdece53cb23f5d10957f5d2c6a98359984',
@@ -400,8 +457,8 @@ export default {
     '0x0f1340d69d18565a77120040f15948077bb87f5fd3b1c2666f202d444d88ffd4',
     '0x242d5ac81dfcbb63e00c40cac6d138e57e9d71f047c1a40d59a65280695169b1',
     '0xb949b3ce3c2b813de63d73a51a952ae6f784d441d11060ecab8c3f6e0fad540c',
-    '0xa0936910277b4521864ec35b0ec599ad1ee36e5afa93964691936e80b68a0435',
     '0xc07c921cca66cb0c6f781175dd605b76843c9ab6522a24211957463d883b79ef',
+    '0x0e700378e2d2b5b15f721762b019f32ff9dcfdbb303207c13e86a4248c2b6240',
     '0x73cf70f6ecc073e2112495f52807b56d013d8e8ab5d1ecd96776140afd549f38',
     '0xf225f024415d9d181722afe86bf07b6c4a3507cca302dd48427290bbaabc2472',
   ],
