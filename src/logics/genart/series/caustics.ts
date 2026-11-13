@@ -12,7 +12,12 @@
 // The floor is then seen from above through the same surface (so lane lines
 // wobble), lit by ambient sky plus the gathered sunlight, and tinted by the
 // water column with the Beer-Lambert law. In the Window scene the surface is
-// a pane of old glass and the floor a plastered wall.
+// a leaded window of coloured glass and the floor a plastered wall.
+//
+// Shading is in linear light (sRGB decoded and encoded through tables). The
+// exposure of each piece comes from percentiles of a small probe render of
+// the square composition, so it is the same at every size and aspect, and a
+// highlight shoulder rolls the brightest lines off towards white.
 //
 // Everything is a pure function of the hash; every length is a fraction of
 // the canvas short side, measured from the centre of the canvas.
@@ -73,13 +78,20 @@ interface Palette {
   /** Wall lighting for the Window scene. */
   wallAmb: number
   wallSun: number
+  /** Window glass, the pale one first. */
+  glass: readonly string[]
+  /** Range of linear light the exposure keeps the median floor in (key 0: no lower bound). */
+  key: number
+  ceil: number
+  /** Share of the darkest floor (2nd percentile) taken as black: deeper blacks for the dark palettes. */
+  black: number
 }
 
 const PAL: Record<Features['Palette'], Palette> = {
   Aqua: {
-    amb: 0.3,
+    amb: 0.13,
     ambTint: '#d2e8f2',
-    sun: 0.5,
+    sun: 0.72,
     sunTint: '#fff3d8',
     water: '#1d86a8',
     sigma: [0.55, 0.16, 0.1],
@@ -94,13 +106,17 @@ const PAL: Record<Features['Palette'], Palette> = {
     stones: ['#cbbda4', '#9c968c', '#e2dacb', '#7f766a', '#b79e7e'],
     grit: '#8c7f68',
     wall: '#eef0ea',
-    wallAmb: 0.24,
-    wallSun: 0.4,
+    wallAmb: 0.11,
+    wallSun: 0.9,
+    glass: ['#eef2e4', '#1f55d6', '#0f9aa0', '#f0ae1c', '#c8202e'],
+    key: 0.2,
+    ceil: 0.45,
+    black: 0.15,
   },
   Lagoon: {
-    amb: 0.3,
+    amb: 0.13,
     ambTint: '#dcebe2',
-    sun: 0.5,
+    sun: 0.72,
     sunTint: '#fffbe6',
     water: '#1f8f7f',
     sigma: [0.6, 0.12, 0.22],
@@ -115,13 +131,17 @@ const PAL: Record<Features['Palette'], Palette> = {
     stones: ['#d3c7ae', '#8f9a8c', '#ebe3d1', '#6f7a6c', '#c2a684'],
     grit: '#857a62',
     wall: '#e7ecdc',
-    wallAmb: 0.24,
-    wallSun: 0.4,
+    wallAmb: 0.11,
+    wallSun: 0.9,
+    glass: ['#eef0dc', '#119a52', '#0c8f94', '#e9b51f', '#2c4fc4'],
+    key: 0.2,
+    ceil: 0.42,
+    black: 0.15,
   },
   Amber: {
-    amb: 0.26,
+    amb: 0.11,
     ambTint: '#c9d5da',
-    sun: 0.56,
+    sun: 0.75,
     sunTint: '#ffd49a',
     water: '#2f6f68',
     sigma: [0.32, 0.22, 0.3],
@@ -136,11 +156,15 @@ const PAL: Record<Features['Palette'], Palette> = {
     stones: ['#d8b88e', '#a5826a', '#ead2b0', '#7a5a46', '#c49470'],
     grit: '#7c5e44',
     wall: '#eedbbc',
-    wallAmb: 0.22,
-    wallSun: 0.46,
+    wallAmb: 0.1,
+    wallSun: 0.95,
+    glass: ['#f4ead2', '#f0a514', '#e2661a', '#b8122a', '#16804e'],
+    key: 0.2,
+    ceil: 0.42,
+    black: 0.15,
   },
   Nocturne: {
-    amb: 0.14,
+    amb: 0.07,
     ambTint: '#7f9cc8',
     sun: 1.05,
     sunTint: '#c4f2ff',
@@ -157,13 +181,17 @@ const PAL: Record<Features['Palette'], Palette> = {
     stones: ['#8592a8', '#5e6a80', '#a4afc2', '#4a5468', '#7a7f96'],
     grit: '#3c465a',
     wall: '#6c7890',
-    wallAmb: 0.16,
-    wallSun: 1.05,
+    wallAmb: 0.06,
+    wallSun: 1.1,
+    glass: ['#e4ecf2', '#2449d8', '#7a2cc2', '#c0172e', '#119c9c'],
+    key: 0,
+    ceil: 0.22,
+    black: 0.5,
   },
   Ink: {
-    amb: 0.05,
+    amb: 0.03,
     ambTint: '#ffffff',
-    sun: 0.72,
+    sun: 0.8,
     sunTint: '#fff8ec',
     water: '#060607',
     sigma: [0.35, 0.35, 0.35],
@@ -175,11 +203,15 @@ const PAL: Record<Features['Palette'], Palette> = {
     sandA: '#d6d1c6',
     sandB: '#bdb7aa',
     speck: '#6a665e',
-    stones: ['#d4d2cc', '#9a9892', '#eeece6', '#77756f', '#b8b4aa'],
-    grit: '#5c5a55',
+    stones: ['#9c9a94', '#6a6864', '#b8b6b0', '#4c4a46', '#86827a'],
+    grit: '#22211f',
     wall: '#e4e2dc',
-    wallAmb: 0.04,
-    wallSun: 0.95,
+    wallAmb: 0.035,
+    wallSun: 1.0,
+    glass: ['#f1eee4', '#c8142a', '#1d47d0', '#efa912', '#12935a'],
+    key: 0,
+    ceil: 0.22,
+    black: 0.75,
   },
 }
 
@@ -223,6 +255,14 @@ interface Window {
   panes: number[]
   /** Quarter turns of each pane's glass: every pane is its own piece. */
   turns: number[]
+  /** Width of the border band of narrow panes (0: none). */
+  border: number
+  /** Border panes along each long side. */
+  segs: number
+  /** Diamond quarries in the field instead of rectangular panes. */
+  quarry: boolean
+  /** Glass of each pane: index into the palette's glass list (25 field panes, 2 border, 1 corner). */
+  glass: number[]
 }
 
 /** Depth factor of the floor, around 1. */
@@ -308,7 +348,8 @@ function makeScene(f: Features, pal: Palette, r: Rng, aa: number): Scene {
     const depth: Depth = (x, y) => 1 + 0.18 * Math.sin(w.k * (x * Math.cos(w.a) + y * Math.sin(w.a)) + w.p)
     return { albedo, depth, window: null }
   }
-  // Window: the shadow of a mullioned window on a wall, skewed by the low sun
+  // Window: a leaded window of coloured glass, its light thrown on a wall
+  // and skewed by the low sun
   const win: Window = {
     cx: range(r, -0.05, 0.05),
     cy: range(r, -0.05, 0.05),
@@ -320,37 +361,131 @@ function makeScene(f: Features, pal: Palette, r: Rng, aa: number): Scene {
     bar: range(r, 0.012, 0.022),
     panes: Array.from({ length: 25 }, () => pick(r, [0.3, 0.75, 1, 1, 1.2])),
     turns: Array.from({ length: 25 }, () => int(r, 0, 3)),
+    // drawn after the original window draws, which keep their values
+    border: 0,
+    segs: 0,
+    quarry: false,
+    glass: [],
   }
+  win.border = r() < 0.65 ? range(r, 0.036, 0.056) : 0
+  win.quarry = r() < 0.35
+  const n = pal.glass.length
+  // the first glass of each list is the pale one: a field of mostly pale
+  // quarries, or of mostly coloured panes, around a coloured border
+  win.glass = Array.from({ length: 28 }, (_, i) => {
+    const paleShare = i >= 25 ? 0.1 : win.quarry ? 0.6 : 0.25
+    return r() < paleShare ? 0 : int(r, 1, n - 1)
+  })
+  if (win.glass[25] === win.glass[26])
+    win.glass[26] = 1 + (win.glass[25] % (n - 1))
   // keep the skewed patch inside the square
   win.hw = Math.min(win.hw, 0.45 - Math.abs(win.skew) * win.hh - Math.abs(win.cx))
+  win.segs = Math.max(2, Math.round((2 * win.hh - 2 * win.border) / (win.border * 3.2 + 1e-9)))
   return { albedo: plaster(hex(pal.wall), seed), depth: () => 1, window: win }
 }
 
+/** Distance from t to the nearest integer. */
+const fracDist = (t: number) => Math.abs(t - Math.round(t))
+
 /**
- * Light let through by the window at (x, y), the index of its pane and the
- * distance to the nearest bar.
+ * Light let through by the window at (x, y): its share (0 on the lead and
+ * outside), the pane (0..24 field, 25..26 border, 27 corner) and the distance
+ * to the nearest lead.
  */
 function windowAt(w: Window, x: number, y: number, soft: number): [number, number, number] {
   const v = (y - w.cy) / w.hh
   const u = (x - w.cx - w.skew * (y - w.cy)) / w.hw
   if (u <= -1 || u >= 1 || v <= -1 || v >= 1)
     return [0, 0, 0]
-  // distance to the frame and to the nearest bar, in composition units
-  const pu = (u + 1) * 0.5 * w.cols
-  const pv = (v + 1) * 0.5 * w.rows
-  const iu = Math.min(w.cols - 1, Math.floor(pu))
-  const iv = Math.min(w.rows - 1, Math.floor(pv))
-  const du = Math.min(pu - iu, iu + 1 - pu) * 2 * w.hw / w.cols
-  const dv = Math.min(pv - iv, iv + 1 - pv) * 2 * w.hh / w.rows
-  // frame bars are a little heavier than the glazing bars
+  const X = u * w.hw
+  const Y = v * w.hh
+  // distance to the frame: a little heavier than the glazing bars
   const fu = (1 - Math.abs(u)) * w.hw
   const fv = (1 - Math.abs(v)) * w.hh
-  const half = w.bar * 0.5
-  const d = Math.min(du - half, dv - half, fu - w.bar, fv - w.bar)
-  return [smooth(d / soft + 0.5), iv * 5 + iu, d]
+  // came a little wider than drawn, so the leading reads at a glance
+  const half = w.bar * 0.65
+  let d = Math.min(fu, fv) - w.bar * 1.3
+  let pane: number
+  const bw = w.border
+  if (bw > 0 && (fu < bw || fv < bw)) {
+    // border band: corner squares, and the sides cut into short panes
+    d = Math.min(d, Math.min(Math.abs(fu - bw), Math.abs(fv - bw)) - half)
+    if (fu < bw && fv < bw) {
+      pane = 27
+    }
+    else {
+      const side = fu < bw
+      const len = side ? w.hh - bw : w.hw - bw
+      const t = ((side ? Y : X) + len) / (2 * len) * w.segs
+      d = Math.min(d, fracDist(t) * 2 * len / w.segs - half)
+      pane = 25 + (Math.floor(t) & 1)
+    }
+  }
+  else {
+    const iw = w.hw - bw
+    const ih = w.hh - bw
+    if (bw > 0)
+      d = Math.min(d, Math.min(fu, fv) - bw - half)
+    if (w.quarry) {
+      // diamond lattice: lines a = const and b = const
+      const qw = 2 * iw / (w.cols + 1)
+      const qh = 2 * ih / (w.rows + 1)
+      const a = X / qw + Y / qh
+      const b = X / qw - Y / qh
+      const g = 1 / Math.sqrt(1 / (qw * qw) + 1 / (qh * qh))
+      d = Math.min(d, Math.min(fracDist(a), fracDist(b)) * g - half)
+      pane = (((Math.floor(a) * 3 + Math.floor(b) * 7) % 25) + 25) % 25
+    }
+    else {
+      const pu = (X + iw) / (2 * iw) * w.cols
+      const pv = (Y + ih) / (2 * ih) * w.rows
+      const iu = Math.min(w.cols - 1, Math.max(0, Math.floor(pu)))
+      const iv = Math.min(w.rows - 1, Math.max(0, Math.floor(pv)))
+      const du = Math.min(pu - iu, iu + 1 - pu) * 2 * iw / w.cols
+      const dv = Math.min(pv - iv, iv + 1 - pv) * 2 * ih / w.rows
+      d = Math.min(d, du - half, dv - half)
+      pane = iv * 5 + iu
+    }
+  }
+  return [smooth(d / soft + 0.5), pane, d]
 }
 
 type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
+
+/** sRGB transfer functions. */
+const decode = (c: number) => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+const encode = (c: number) => c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055
+const lin = (c: string): Rgb => hex(c).map(decode) as unknown as Rgb
+
+/**
+ * Highlight shoulder: the identity up to KNEE (linear light), then an
+ * exponential roll-off towards white with slope 1 at the knee, so mid tones
+ * keep their colour and the cores of the caustics keep their gradient
+ * instead of clipping flat. Channels roll off on their own: a bright
+ * coloured line drifts towards white, as on film.
+ */
+const KNEE = 0.5
+function shoulder(x: number) {
+  return x < KNEE ? x : KNEE + (1 - KNEE) * (1 - Math.exp(-(x - KNEE) / (1 - KNEE)))
+}
+/** Linear light that the exposure puts at the high percentile of the piece: near white, still graded. */
+const WHITE = KNEE + 2.6 * (1 - KNEE)
+/** Percentile of the brightest channel that defines the highlights. */
+const HI = 0.995
+
+/** The light maps of one lattice and what the shading needs from it. */
+interface Traced {
+  nx: number
+  ny: number
+  c: number
+  x0: number
+  y0: number
+  depth: Float32Array
+  vdx: Float32Array | null
+  vdy: Float32Array | null
+  /** Gathered light per colour channel, on the (nx-1) × (ny-1) cells; may alias. */
+  light: Float32Array[]
+}
 
 function paint(ctx: Ctx2D, W: number, H: number, hash: string) {
   const f = features(hash)
@@ -370,7 +505,9 @@ function paint(ctx: Ctx2D, W: number, H: number, hash: string) {
   const nIdx = isWindow ? N_GLASS : N_WATER
   const prism = f.Light === 'Prism'
   const etas = prism ? nIdx.map(n => 1 / n) : [1 / nIdx[1]]
+  // the scene's own antialiasing width is in output pixels; nothing else depends on S
   const scene = makeScene(f, pal, stream(hash, 'floor'), 0.5 / S)
+  const glass = pal.glass.map(lin)
 
   // --- normalisation on a fixed lattice over the square composition -------
   const NC = 129
@@ -427,114 +564,112 @@ function paint(ctx: Ctx2D, W: number, H: number, hash: string) {
     D0 = cap / (dMax * maxG * 1.08)
   const shift = D0 * dMax * maxG * 1.1
   const viewScale = isWindow ? 0 : VIEW
-
-  // --- the lattice: anchored at the centre, so every aspect shares it -------
-  // three light maps for Prism: a slightly coarser lattice keeps it as fast
-  const G = Math.round(clamp(S * (prism ? 0.48 : 0.6), 260, 1100))
-  const c = 1 / G
-  const halfW = W / (2 * S)
-  const halfH = H / (2 * S)
-  const margin = shift * (1 + viewScale) + 3 * c
-  const iX = Math.ceil((halfW + margin) / c)
-  const iY = Math.ceil((halfH + margin) / c)
-  const nx = 2 * iX + 1
-  const ny = 2 * iY + 1
-  const xs = new Float64Array(nx).map((_, i) => (i - iX) * c)
-  const ys = new Float64Array(ny).map((_, j) => (j - iY) * c)
-  const h = new Float32Array(nx * ny)
-  surface.evaluate(xs, ys, h)
-
-  const nv = nx * ny
-  const depth = new Float32Array(nv)
-  const vdx = new Float32Array(nv)
-  const vdy = new Float32Array(nv)
-  const weight = scene.window ? new Float32Array(nv) : null
-  const chans = etas.length
-  const mapX = Array.from({ length: chans }, () => new Float32Array(nv))
-  const mapY = Array.from({ length: chans }, () => new Float32Array(nv))
-  const g = new Float32Array(2)
-  const soft = Math.max(0.0025, 1.5 * c)
-  // the depth varies slowly: evaluated every ST vertices, then interpolated
-  const ST = 8
-  const dnx = Math.ceil((nx - 1) / ST) + 1
-  const dny = Math.ceil((ny - 1) / ST) + 1
-  const coarse = new Float32Array(dnx * dny)
-  for (let jj = 0; jj < dny; jj++) {
-    for (let ii = 0; ii < dnx; ii++)
-      coarse[jj * dnx + ii] = scene.depth((ii * ST - iX) * c, (jj * ST - iY) * c)
-  }
-  for (let j = 0; j < ny; j++) {
-    const jj = Math.floor(j / ST)
-    const ty = j / ST - jj
-    for (let i = 0; i < nx; i++) {
-      const ii = Math.floor(i / ST)
-      const tx = i / ST - ii
-      const o = jj * dnx + ii
-      const a = coarse[o] + (coarse[o + 1] - coarse[o]) * tx
-      const b = coarse[o + dnx] + (coarse[o + dnx + 1] - coarse[o + dnx]) * tx
-      depth[j * nx + i] = a + (b - a) * ty
-    }
-  }
   // seen from straight above, the view ray is the light ray of a noon sun
   const sameView = !sunUp && !prism
-  for (let j = 0; j < ny; j++) {
-    const jm = j > 0 ? j - 1 : j
-    const jp = j < ny - 1 ? j + 1 : j
-    for (let i = 0; i < nx; i++) {
-      const o = j * nx + i
-      const im = i > 0 ? i - 1 : i
-      const ip = i < nx - 1 ? i + 1 : i
-      let sx = A * (h[j * nx + ip] - h[j * nx + im]) / ((ip - im) * c)
-      let sy = A * (h[jp * nx + i] - h[jm * nx + i]) / ((jp - jm) * c)
-      if (scene.window && weight) {
-        const [w, pane, edge] = windowAt(scene.window, xs[i], ys[j], soft)
-        weight[o] = w
-        // the lead holds the glass flat along its edges
-        const m = scene.window.panes[pane] * smooth(edge / 0.035)
-        const t = scene.window.turns[pane]
-        const ax = sx * m
-        const ay = sy * m
-        sx = t === 0 ? ax : t === 1 ? -ay : t === 2 ? -ax : ay
-        sy = t === 0 ? ay : t === 1 ? ax : t === 2 ? -ay : -ax
-      }
-      const d = D0 * depth[o]
-      for (let ch = 0; ch < chans; ch++) {
-        rays[ch](sx, sy, g, 0)
-        mapX[ch][o] = i + d * g[0] / c
-        mapY[ch][o] = j + d * g[1] / c
-      }
-      if (viewScale > 0) {
-        if (!sameView)
-          view(sx, sy, g, 0)
-        vdx[o] = viewScale * d * g[0]
-        vdy[o] = viewScale * d * g[1]
+
+  /**
+   * Traces a lattice of spacing 1 / G, anchored at the centre, that covers
+   * the rectangle |x| <= halfW, |y| <= halfH plus the reach of the rays.
+   */
+  const trace = (G: number, halfW: number, halfH: number): Traced => {
+    const c = 1 / G
+    const margin = shift * (1 + viewScale) + 3 * c
+    const iX = Math.ceil((halfW + margin) / c)
+    const iY = Math.ceil((halfH + margin) / c)
+    const nx = 2 * iX + 1
+    const ny = 2 * iY + 1
+    const xs = new Float64Array(nx).map((_, i) => (i - iX) * c)
+    const ys = new Float64Array(ny).map((_, j) => (j - iY) * c)
+    const h = new Float32Array(nx * ny)
+    surface.evaluate(xs, ys, h)
+    const nv = nx * ny
+    const depth = new Float32Array(nv)
+    const vdx = viewScale > 0 ? new Float32Array(nv) : null
+    const vdy = viewScale > 0 ? new Float32Array(nv) : null
+    // the window filters each channel through its glass
+    const weight = scene.window ? [0, 1, 2].map(() => new Float32Array(nv)) : null
+    const chans = etas.length
+    const mapX = Array.from({ length: chans }, () => new Float32Array(nv))
+    const mapY = Array.from({ length: chans }, () => new Float32Array(nv))
+    const g = new Float32Array(2)
+    const soft = Math.max(0.0025, 1.5 * c)
+    // the depth varies slowly: evaluated every ST vertices, then interpolated
+    const ST = 8
+    const dnx = Math.ceil((nx - 1) / ST) + 1
+    const dny = Math.ceil((ny - 1) / ST) + 1
+    const coarse = new Float32Array(dnx * dny)
+    for (let jj = 0; jj < dny; jj++) {
+      for (let ii = 0; ii < dnx; ii++)
+        coarse[jj * dnx + ii] = scene.depth((ii * ST - iX) * c, (jj * ST - iY) * c)
+    }
+    for (let j = 0; j < ny; j++) {
+      const jj = Math.floor(j / ST)
+      const ty = j / ST - jj
+      for (let i = 0; i < nx; i++) {
+        const ii = Math.floor(i / ST)
+        const tx = i / ST - ii
+        const o = jj * dnx + ii
+        const a = coarse[o] + (coarse[o + 1] - coarse[o]) * tx
+        const b = coarse[o + dnx] + (coarse[o + dnx + 1] - coarse[o + dnx]) * tx
+        depth[j * nx + i] = a + (b - a) * ty
       }
     }
+    for (let j = 0; j < ny; j++) {
+      const jm = j > 0 ? j - 1 : j
+      const jp = j < ny - 1 ? j + 1 : j
+      for (let i = 0; i < nx; i++) {
+        const o = j * nx + i
+        const im = i > 0 ? i - 1 : i
+        const ip = i < nx - 1 ? i + 1 : i
+        let sx = A * (h[j * nx + ip] - h[j * nx + im]) / ((ip - im) * c)
+        let sy = A * (h[jp * nx + i] - h[jm * nx + i]) / ((jp - jm) * c)
+        if (scene.window && weight) {
+          const [w, pane, edge] = windowAt(scene.window, xs[i], ys[j], soft)
+          const tint = glass[scene.window.glass[pane]]
+          weight[0][o] = w * tint[0]
+          weight[1][o] = w * tint[1]
+          weight[2][o] = w * tint[2]
+          // the lead holds the glass flat along its edges
+          const m = (0.4 + 0.6 * scene.window.panes[pane % 25]) * smooth(edge / 0.035)
+          const t = scene.window.turns[pane % 25]
+          const ax = sx * m
+          const ay = sy * m
+          sx = t === 0 ? ax : t === 1 ? -ay : t === 2 ? -ax : ay
+          sy = t === 0 ? ay : t === 1 ? ax : t === 2 ? -ay : -ax
+        }
+        const d = D0 * depth[o]
+        for (let ch = 0; ch < chans; ch++) {
+          rays[ch](sx, sy, g, 0)
+          mapX[ch][o] = i + d * g[0] / c
+          mapY[ch][o] = j + d * g[1] / c
+        }
+        if (vdx && vdy) {
+          if (!sameView)
+            view(sx, sy, g, 0)
+          vdx[o] = viewScale * d * g[0]
+          vdy[o] = viewScale * d * g[1]
+        }
+      }
+    }
+    const light: Float32Array[] = []
+    for (let ch = 0; ch < 3; ch++) {
+      const m = prism ? ch : 0
+      if (!weight && ch > 0 && !prism) {
+        light.push(light[0])
+        continue
+      }
+      const l = gather(mapX[m], mapY[m], weight ? weight[ch] : null, nx, ny, 2)
+      soften(l, nx - 1, ny - 1)
+      light.push(l)
+    }
+    return { nx, ny, c, x0: xs[0], y0: ys[0], depth, vdx, vdy, light }
   }
-  const light = mapX.map((mx, ch) => gather(mx, mapY[ch], weight, nx, ny, 2))
-  const cw = nx - 1
-  for (const l of light)
-    soften(l, cw, ny - 1)
-  const lR = light[0]
-  const lG = light[prism ? 1 : 0]
-  const lB = light[prism ? 2 : 0]
 
-  // --- pixels ---------------------------------------------------------------
-  const amb = hex(pal.ambTint).map(v => v * (isWindow ? pal.wallAmb : pal.amb))
-  const sunC = hex(pal.sunTint).map(v => v * (isWindow ? pal.wallSun : pal.sun))
-  const water = hex(pal.water)
+  // --- shading, in linear light -------------------------------------------
+  const ambC = lin(pal.ambTint).map(v => v * (isWindow ? pal.wallAmb : pal.amb))
+  const sunC = lin(pal.sunTint).map(v => v * (isWindow ? pal.wallSun : pal.sun))
+  const water = lin(pal.water)
   const sigma = isWindow ? [0, 0, 0] : pal.sigma
-  // soft-clipping tone curve, tabulated: linear-ish below 1, white above
-  const LUT = 2048
-  const LMAX = 4
-  const tone = new Uint8ClampedArray(LUT + 1)
-  const k = 1.4
-  const norm = 1 / (1 - Math.exp(-k))
-  for (let i = 0; i <= LUT; i++) {
-    const x = i / LUT * LMAX
-    tone[i] = Math.round(255 * Math.min(1, (1 - Math.exp(-k * x)) * norm))
-  }
-  const toLut = LUT / LMAX
   // per-depth transmission, tabulated on the depth factor
   const TD = 256
   const trans = new Float32Array((TD + 1) * 3)
@@ -543,53 +678,48 @@ function paint(ctx: Ctx2D, W: number, H: number, hash: string) {
     for (let ch = 0; ch < 3; ch++)
       trans[i * 3 + ch] = Math.exp(-sigma[ch] * dd)
   }
-
-  const img = ctx.createImageData(W, H)
-  const pix = new Uint32Array(img.data.buffer)
+  // the floors write display (sRGB) albedos: decoded through a table
+  const DN = 2048
+  const DMAX = 1.5
+  const dec = new Float32Array(DN + 1).map((_, i) => decode(i / DN * DMAX))
+  const toDec = DN / DMAX
   const alb = new Float32Array(3)
-  const x0 = xs[0]
-  const y0 = ys[0]
-  const invC = 1 / c
-  const invS = 1 / S
-  // per column: position, vertex index and fraction, vignette
-  const colX = new Float64Array(W)
-  const colI = new Int32Array(W)
-  const colT = new Float32Array(W)
-  const colV = new Float32Array(W)
-  for (let px = 0; px < W; px++) {
-    const xc = (px + 0.5 - W / 2) * invS
-    const fxv = (xc - x0) * invC
-    colX[px] = xc
-    colI[px] = fxv | 0
-    colT[px] = fxv - (fxv | 0)
-    const n = (px + 0.5 - W / 2) / (W / 2)
-    colV[px] = 0.14 * n * n
-  }
-  const hasView = viewScale > 0
   const half = TD / 2
-  for (let py = 0; py < H; py++) {
-    const yc = (py + 0.5 - H / 2) * invS
-    const vyN = (py + 0.5 - H / 2) / (H / 2)
-    const vigY = 1 - 0.14 * vyN * vyN
-    const fyv = (yc - y0) * invC
-    const jv = fyv | 0
-    const ty = fyv - jv
-    const rowO = jv * nx
-    const prow = py * W
-    for (let px = 0; px < W; px++) {
-      const tx = colT[px]
-      const o = rowO + colI[px]
+
+  /** The shading of one traced lattice: linear radiance of the floor seen at (xc, yc), into out. */
+  const shader = (T: Traced) => {
+    const nx = T.nx
+    const cw = nx - 1
+    const invC = 1 / T.c
+    const x0 = T.x0
+    const y0 = T.y0
+    const vdx = T.vdx
+    const vdy = T.vdy
+    const dp = T.depth
+    const lR = T.light[0]
+    const lG = T.light[1]
+    const lB = T.light[2]
+    const mono = lG === lR
+    const albedo = scene.albedo
+    return (xc: number, yc: number, out: Float32Array) => {
+      const fxv = (xc - x0) * invC
+      const fyv = (yc - y0) * invC
+      const iv = fxv | 0
+      const jv = fyv | 0
+      const tx = fxv - iv
+      const ty = fyv - jv
+      const o = jv * nx + iv
       const w00 = (1 - tx) * (1 - ty)
       const w10 = tx * (1 - ty)
       const w01 = (1 - tx) * ty
       const w11 = tx * ty
-      let qx = colX[px]
+      let qx = xc
       let qy = yc
-      if (hasView) {
+      if (vdx && vdy) {
         qx += vdx[o] * w00 + vdx[o + 1] * w10 + vdx[o + nx] * w01 + vdx[o + nx + 1] * w11
         qy += vdy[o] * w00 + vdy[o + 1] * w10 + vdy[o + nx] * w01 + vdy[o + nx + 1] * w11
       }
-      const dm = depth[o] * w00 + depth[o + 1] * w10 + depth[o + nx] * w01 + depth[o + nx + 1] * w11
+      const dm = dp[o] * w00 + dp[o + 1] * w10 + dp[o + nx] * w01 + dp[o + nx + 1] * w11
       // light at the floor point, on the cell centres
       const fx = (qx - x0) * invC - 0.5
       const fy = (qy - y0) * invC - 0.5
@@ -605,22 +735,90 @@ function paint(ctx: Ctx2D, W: number, H: number, hash: string) {
       const eR = lR[q] * e00 + lR[q + 1] * e10 + lR[q + cw] * e01 + lR[q + cw + 1] * e11
       let eG = eR
       let eB = eR
-      if (prism) {
+      if (!mono) {
         eG = lG[q] * e00 + lG[q + 1] * e10 + lG[q + cw] * e01 + lG[q + cw + 1] * e11
         eB = lB[q] * e00 + lB[q + 1] * e10 + lB[q + cw] * e01 + lB[q + cw + 1] * e11
       }
-      scene.albedo(qx, qy, alb)
+      albedo(qx, qy, alb)
       let ti = (dm * half + 0.5) | 0
       ti = (ti > TD ? TD : ti) * 3
-      const vig = (vigY - colV[px]) * toLut
+      const a0 = alb[0] * toDec
+      const a1 = alb[1] * toDec
+      const a2 = alb[2] * toDec
       const t0 = trans[ti]
       const t1 = trans[ti + 1]
       const t2 = trans[ti + 2]
-      const r0 = ((alb[0] * (amb[0] + sunC[0] * eR) * t0 + water[0] * (1 - t0)) * vig) | 0
-      const r1 = ((alb[1] * (amb[1] + sunC[1] * eG) * t1 + water[1] * (1 - t1)) * vig) | 0
-      const r2 = ((alb[2] * (amb[2] + sunC[2] * eB) * t2 + water[2] * (1 - t2)) * vig) | 0
+      out[0] = dec[a0 > DN ? DN : a0 | 0] * (ambC[0] + sunC[0] * eR) * t0 + water[0] * (1 - t0)
+      out[1] = dec[a1 > DN ? DN : a1 | 0] * (ambC[1] + sunC[1] * eG) * t1 + water[1] * (1 - t1)
+      out[2] = dec[a2 > DN ? DN : a2 | 0] * (ambC[2] + sunC[2] * eB) * t2 + water[2] * (1 - t2)
+    }
+  }
+
+  // --- exposure: measured on a small fixed lattice over the square ---------
+  // composition, so it is the same at every output size and aspect ratio
+  const probe = shader(trace(120, 0.5, 0.5))
+  const PN = 96
+  const lum = new Float32Array(PN * PN)
+  const px3 = new Float32Array(3)
+  for (let j = 0; j < PN; j++) {
+    for (let i = 0; i < PN; i++) {
+      probe(-0.5 + (i + 0.5) / PN, -0.5 + (j + 0.5) / PN, px3)
+      // the brightest channel: a saturated colour must not clip either
+      lum[j * PN + i] = Math.max(px3[0], px3[1], px3[2])
+    }
+  }
+  lum.sort()
+  const hi = Math.max(1e-4, lum[Math.floor(lum.length * HI)])
+  const med = Math.max(1e-4, lum[lum.length >> 1])
+  // highlights near white, unless that would sink the floor into murk: the
+  // shoulder then takes the extra light
+  const key = isWindow ? 0 : pal.key
+  const black = isWindow ? 0 : pal.black * lum[Math.floor(lum.length * 0.02)]
+  let exposure = Math.max(WHITE / (hi - black), key / (med - black))
+  // and never a floor lit so evenly that it is mostly white
+  if (!isWindow)
+    exposure = Math.min(exposure, pal.ceil / (med - black))
+  exposure = clamp(exposure, 0.45, 1.6)
+
+  // tone curve and sRGB encoding in one table over the exposed linear light
+  const LUT = 8192
+  const LMAX = 6
+  const tone = new Uint8ClampedArray(LUT + 1)
+  for (let i = 0; i <= LUT; i++)
+    tone[i] = Math.round(255 * encode(shoulder(i / LUT * LMAX)))
+
+  // --- the picture's own lattice -------------------------------------------
+  // three light maps for Prism and Window: a slightly coarser lattice keeps them as fast
+  const G = Math.round(clamp(S * (prism || isWindow ? 0.42 : 0.5), 260, 1100))
+  const shade = shader(trace(G, W / (2 * S), H / (2 * S)))
+
+  const img = ctx.createImageData(W, H)
+  const pix = new Uint32Array(img.data.buffer)
+  const invS = 1 / S
+  const colX = new Float64Array(W)
+  const colV = new Float32Array(W)
+  for (let px = 0; px < W; px++) {
+    colX[px] = (px + 0.5 - W / 2) * invS
+    const n = (px + 0.5 - W / 2) / (W / 2)
+    colV[px] = 0.14 * n * n
+  }
+  const toLut = LUT / LMAX * exposure
+  for (let py = 0; py < H; py++) {
+    const yc = (py + 0.5 - H / 2) * invS
+    const vyN = (py + 0.5 - H / 2) / (H / 2)
+    const vigY = 1 - 0.14 * vyN * vyN
+    const prow = py * W
+    for (let px = 0; px < W; px++) {
+      shade(colX[px], yc, px3)
+      const vig = (vigY - colV[px]) * toLut
+      const r0 = (px3[0] - black) * vig
+      const r1 = (px3[1] - black) * vig
+      const r2 = (px3[2] - black) * vig
+      const i0 = r0 <= 0 ? 0 : r0 >= LUT ? LUT : r0 | 0
+      const i1 = r1 <= 0 ? 0 : r1 >= LUT ? LUT : r1 | 0
+      const i2 = r2 <= 0 ? 0 : r2 >= LUT ? LUT : r2 | 0
       // little-endian RGBA
-      pix[prow + px] = 0xFF000000 | (tone[r2 > LUT ? LUT : r2] << 16) | (tone[r1 > LUT ? LUT : r1] << 8) | tone[r0 > LUT ? LUT : r0]
+      pix[prow + px] = 0xFF000000 | (tone[i2] << 16) | (tone[i1] << 8) | tone[i0]
     }
   }
   ctx.putImageData(img, 0, 0)
@@ -668,13 +866,15 @@ function render(ctx: CanvasRenderingContext2D, W: number, H: number, hash: strin
 export default {
   slug: 'caustics',
   title: 'Caustics',
-  summary: 'Sunlight refracted by a wavy surface and gathered on the floor below: caustic webs over pool tiles, lane lines, sand and pebbles, or old window glass on a wall.',
+  summary: 'Sunlight refracted by a wavy surface and gathered on the floor below: caustic webs over pool tiles, lane lines, sand and pebbles, or the coloured light of a leaded window on a wall.',
   order: 610,
   traits: TRAITS,
   features,
   render,
-  // Seed-of-seeds 0xca05710b ("gallery" stream): the first hash found for each
-  // floor x palette pair, in the order found.
+  // Seed-of-seeds 0xca05710b ("gallery" stream, eight 32-bit words per hash):
+  // the first hash found for each floor x palette pair, in the order found,
+  // skipping the ones judged weak on a contact sheet (the 7th, a murky
+  // Pebbles x Lagoon).
   gallery: [
     '0xfe515a357b8727f70e67fea959c7d1fb9e4a9d9ebf67a2c168646e1a88035023',
     '0xf1952a18d8be8091ead2086b57cad8dc642f096fd4c42098327f93c8feaf6b71',
@@ -682,11 +882,11 @@ export default {
     '0xa301b675e40f30de16cb95ee373aeb496e6ad7f5f701fb0d37c0057580c64acf',
     '0x7a9c7f5c205f2aca5296b96e2cb590b29303f08c6dbc946ef2bb7c7418eb0420',
     '0xf4115d8b9baea34a32b9bd997aa75992260eaa80d9040d41c8dbe3d7ee5b6e01',
-    '0x17fd79ce5a31d576e929faee48805a656192789e74dc572e2f112beb39df0327',
     '0x91a10f04012680b646e9375051ea583be62b541042714376fd3f90299dc90543',
     '0x0a26b1efb2ee888655b47ec39f1b4e9b4782a4009c19749f0a5a70bbf5192cdd',
     '0xccc6d50dcf80d93b2c63db93d8b61483405456dfe8e9b82438bd5828afe57384',
     '0xa666dc0401f292f328820b3fc4c0acfe393942102066b7d4a46be18bbe7b33eb',
     '0x876b83630ee5ef8fdbd3618eea980cdef84d6ee2c4e28670e0588b761e5ecefa',
+    '0x1b2928a46f472164cb6d2a546eeb74b5d899c74b14e63c0f289cd56be5050b9f',
   ],
 } satisfies Series
