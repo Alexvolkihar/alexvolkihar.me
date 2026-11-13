@@ -45,7 +45,7 @@ export interface SpheroidSpec {
   rMax: number
   /**
    * 'linear': total light `lum`, as the particle bulge had (spiral bulges).
-   * 'stretch': display brightness lum * (I / Ie)^gamma, a power stretch, so
+   * 'stretch': display brightness lum * ((I / Ie)^gamma - floor), a power stretch, so
    * a giant elliptical keeps a bright core and a halo that fades over many Re
    * (I spans four decades between the centre and 10 Re for n = 4).
    */
@@ -90,12 +90,15 @@ export function drawSpheroid(L: Light, S: SpheroidSpec) {
     // the light per pixel is the density in the galaxy plane over the axis ratio
     norm = S.lum / (acc * S.q)
   }
+  // the stretched halo reaches true zero at 0.8 rMax instead of leaving a
+  // faint veil over the whole sky
+  const floor = S.mode === 'stretch' ? prof(S.rMax * 0.8) ** S.gamma : 0
   for (let i = 0; i <= N + 1; i++) {
     const u = Math.min(1, i / N)
     const r = u * u * S.rMax
     // a pixel never sees the very tip of the cusp
     const I = prof(Math.sqrt(r * r + pix * pix)) * taper(r / S.rMax)
-    const v = S.mode === 'linear' ? I * norm : S.lum * I ** S.gamma
+    const v = S.mode === 'linear' ? I * norm : S.lum * Math.max(0, I ** S.gamma - floor)
     // older, metal-rich stars in the middle: warmer colour inwards
     const c = Math.min(1, Math.sqrt(r / (S.re * 3)))
     tr[i] = v * (S.core[0] + (S.halo[0] - S.core[0]) * c)

@@ -67,16 +67,43 @@ interface Palette {
   nebula: readonly [string, string]
   /** Photographic negative: everything is inverted onto this paper at the end. */
   paper: string | null
+  /** How an elliptical looks in this band (ramp positions, 0..1). */
+  ell: EllStyle
 }
+
+interface EllStyle {
+  core: number
+  halo: number
+  shell: number
+  /** Shell brightness, relative to the default. */
+  shellK: number
+  /** Power stretch of the body: higher is more concentrated. */
+  gamma: number
+  gcBlue: readonly [number, number]
+  gcRed: readonly [number, number]
+  giants: readonly [number, number]
+  /** Glow of the dust lane per unit of optical depth (thermal emission). */
+  laneGlow: number
+  /** Brightness of the body and of the globular clusters, relative to the default. */
+  lum: number
+  gcK: number
+}
+
+// Visible light: a warm core, a paler halo, blue and red globular clusters.
+const ELL_VISIBLE: EllStyle = { core: 0.22, halo: 0.42, shell: 0.46, shellK: 1, gamma: 0.64, gcBlue: [0.5, 0.62], gcRed: [0.22, 0.34], giants: [0.1, 0.35], laneGlow: 0.5, lum: 1, gcK: 1 }
 
 const PAL: Record<Features['Palette'], Palette> = {
   // blackbody-like star colours after Mitchell Charity's table, pushed a little
-  Hubble: { bg: '#030409', ramp: ['#ff8f45', '#ffb36e', '#ffd9a8', '#fff1e4', '#c9d8ff', '#86a8ff'], hii: '#ff4f8f', extinction: [0.75, 1, 1.3], dustGlow: null, nebula: ['#d0386e', '#3658c8'], paper: null },
-  Narrowband: { bg: '#020909', ramp: ['#a35418', '#d98f34', '#efc66a', '#bfe3bf', '#4cc9bb', '#1d9fbf'], hii: '#ffe066', extinction: [0.8, 1, 1.2], dustGlow: null, nebula: ['#2bb59a', '#d9962e'], paper: null },
-  Infrared: { bg: '#070203', ramp: ['#7a1f10', '#b8401c', '#e9833a', '#ffc98a', '#fff0dc', '#ffffff'], hii: '#ffe9c2', extinction: [0.2, 0.3, 0.4], dustGlow: '#ff5226', nebula: ['#b5301a', '#f2a050'], paper: null },
-  Ultraviolet: { bg: '#04030c', ramp: ['#241a5c', '#3d2c96', '#6650cc', '#8c8ff2', '#78d2ff', '#dcf6ff'], hii: '#d690ff', extinction: [0.8, 1, 1.25], dustGlow: null, nebula: ['#5d3ad6', '#2a9fd4'], paper: null },
+  Hubble: { bg: '#030409', ramp: ['#ff8f45', '#ffb36e', '#ffd9a8', '#fff1e4', '#c9d8ff', '#86a8ff'], hii: '#ff4f8f', extinction: [0.75, 1, 1.3], dustGlow: null, nebula: ['#d0386e', '#3658c8'], paper: null, ell: ELL_VISIBLE },
+  Narrowband: { bg: '#020909', ramp: ['#a35418', '#d98f34', '#efc66a', '#bfe3bf', '#4cc9bb', '#1d9fbf'], hii: '#ffe066', extinction: [0.8, 1, 1.2], dustGlow: null, nebula: ['#2bb59a', '#d9962e'], paper: null, ell: ELL_VISIBLE },
+  // infrared: old stars are bright, so the body runs from a white-hot core to a
+  // deep red halo, and warm dust glows instead of hiding the light behind it
+  Infrared: { bg: '#070203', ramp: ['#7a1f10', '#b8401c', '#e9833a', '#ffc98a', '#fff0dc', '#ffffff'], hii: '#ffe9c2', extinction: [0.2, 0.3, 0.4], dustGlow: '#ff5226', nebula: ['#b5301a', '#f2a050'], paper: null, ell: { core: 0.64, halo: 0.12, shell: 0.5, shellK: 1.7, gamma: 0.68, gcBlue: [0.62, 0.78], gcRed: [0.4, 0.55], giants: [0.3, 0.55], laneGlow: 1.4, lum: 0.8, gcK: 1.2 } },
+  // ultraviolet: the old halo is dim, the core shines with hot old stars (the
+  // UV upturn), and young stars in the shells and blue clusters stand out
+  Ultraviolet: { bg: '#04030c', ramp: ['#241a5c', '#3d2c96', '#6650cc', '#8c8ff2', '#78d2ff', '#dcf6ff'], hii: '#d690ff', extinction: [0.8, 1, 1.25], dustGlow: null, nebula: ['#5d3ad6', '#2a9fd4'], paper: null, ell: { core: 0.8, halo: 0.28, shell: 0.86, shellK: 4, gamma: 0.74, gcBlue: [0.82, 0.98], gcRed: [0.55, 0.7], giants: [0.6, 0.8], laneGlow: 0.5, lum: 0.66, gcK: 1.5 } },
   // light colours are 1 - ink / paper, so the negative prints in blue-black ink
-  Plate: { bg: '#000000', ramp: ['#d8cfb5', '#ddd4bb', '#e1d9c2', '#e1d9c2', '#e4dcc8', '#e6dfcc'], hii: '#5fd0cb', extinction: [1, 1, 1], dustGlow: null, nebula: ['#b8b09c', '#c8c0aa'], paper: '#ede5d4' },
+  Plate: { bg: '#000000', ramp: ['#d8cfb5', '#ddd4bb', '#e1d9c2', '#e1d9c2', '#e4dcc8', '#e6dfcc'], hii: '#5fd0cb', extinction: [1, 1, 1], dustGlow: null, nebula: ['#b8b09c', '#c8c0aa'], paper: '#ede5d4', ell: ELL_VISIBLE },
 }
 
 // Proportions along the Hubble sequence (galaxy units: the disc fades out near 1).
@@ -103,6 +130,8 @@ const VIEW: Record<Features['View'], readonly [number, number]> = {
 
 // Particles per (galaxy size in buffer pixels)^2, and the light each one carries.
 const DENS_OLD = 1
+// scale-length factor of the disc the old-disc radii are drawn from
+const WIDEN = 1.4
 const DENS_YOUNG = 0.65
 const DENS_DUST = 0.6
 const E_OLD = 0.75
@@ -389,21 +418,28 @@ function drawGalaxy(L: Light, G: Galaxy, gi: number, hash: string, pal: Palette,
     }
   }
 
-  // --- old disc: every orbit, evenly in phase
+  // --- old disc: every orbit, evenly in phase. Radii are drawn from a wider
+  // disc and each particle's light is weighted back to the true profile, so
+  // the faint outskirts get more, dimmer particles and stay smooth.
   {
     const n = Math.round(DENS_OLD * area * L.dens)
     const e = G.discL * E_OLD / (DENS_OLD * L.dens) * (G.kind === 'irregular' ? 0.45 : 1)
+    const rdS = G.rd * WIDEN
+    const k0 = WIDEN * WIDEN
+    const kr = 1 / G.rd - 1 / rdS
     for (let i = 0; i < n; i++) {
+      let wgt = 1
       if (G.kind === 'spiral') {
-        const a = discRadius(gr, G.rd)
+        const a = discRadius(gr, rdS)
         if (a > 1.8)
           continue
+        wgt = k0 * Math.exp(-a * kr)
         orbit(G, a, gr() * Math.PI * 2, pt, gr() < 0.5 ? 0.3 : 1)
       }
       else {
         sampleIrregular(gr, pt, 1.2)
       }
-      splat(pt[0], pt[1], height(gr, thick), 0.3 + gr() * 0.22, e)
+      splat(pt[0], pt[1], height(gr, thick), 0.3 + gr() * 0.22, e * wgt)
     }
   }
 
@@ -547,6 +583,7 @@ function lutAt(lut: Lut, t: number): [number, number, number] {
  */
 function drawElliptical(L: Light, G: Galaxy, gi: number, hash: string, pal: Palette, lut: Lut, sprites: Sprite[]) {
   const er = stream(hash, `elliptical${gi}`)
+  const ES = pal.ell
   const P = projection(G, L)
   const giant = G.size > 0.25
   // apparent axis ratio of an oblate spheroid at the viewing angle
@@ -566,7 +603,7 @@ function drawElliptical(L: Light, G: Galaxy, gi: number, hash: string, pal: Pale
   if (nShell > 0) {
     const aligned = q < 0.85
     const r0 = re * range(er, 1.3, 1.8)
-    const r1 = re * range(er, 4.5, 6.5)
+    const r1 = re * range(er, 3.8, 5.2)
     const g = (r1 / r0) ** (1 / Math.max(1, nShell - 1))
     const side = er() < 0.5 ? 0 : Math.PI
     const amp = range(er, 0.7, 1.2)
@@ -575,7 +612,7 @@ function drawElliptical(L: Light, G: Galaxy, gi: number, hash: string, pal: Pale
         R: r0 * g ** k * (1 + range(er, -0.08, 0.08)),
         dir: aligned ? side + k * Math.PI + range(er, -0.18, 0.18) : er() * Math.PI * 2,
         open: aligned ? range(er, 0.7, 1.1) : range(er, 0.6, 1),
-        amp: amp * range(er, 0.6, 1.2),
+        amp: amp * range(er, 0.6, 1.2) * ES.shellK,
       })
     }
   }
@@ -590,17 +627,17 @@ function drawElliptical(L: Light, G: Galaxy, gi: number, hash: string, pal: Pale
     a4,
     re,
     n,
-    rMax: Math.min(re * 8, 2.2),
+    rMax: Math.min(re * 8, 2.1),
     mode: 'stretch',
-    lum: 0.5 * G.bulgeL / 2.4,
-    gamma: 0.64,
-    core: lutAt(lut, 0.22),
-    halo: lutAt(lut, 0.42),
+    lum: 0.5 * G.bulgeL / 2.4 * ES.lum,
+    gamma: ES.gamma,
+    core: lutAt(lut, ES.core),
+    halo: lutAt(lut, ES.halo),
     shells,
-    shellColor: lutAt(lut, 0.46),
+    shellColor: lutAt(lut, ES.shell),
   })
   // a sharp nucleus: the soft light is upscaled, the point is not
-  sprites.push({ x: G.cx, y: G.cy, r: 0.0011 + G.size * 0.003, t: 0.45, a: 0.9 })
+  sprites.push({ x: G.cx, y: G.cy, r: 0.0011 + G.size * 0.003, t: (ES.core + 0.45) / 2, a: 0.9 })
 
   // --- globular clusters: a rounder, wider swarm than the light, blue and red
   const qGc = (q + 1) / 2
@@ -616,7 +653,7 @@ function drawElliptical(L: Light, G: Galaxy, gi: number, hash: string, pal: Pale
     const lum = 10 ** (-0.4 * 1.2 * Math.abs(gaussian(er)))
     // lost in the glare of the core
     const vis = smooth(re * 0.3, re * 1.8, rr)
-    sprites.push({ x, y, r: 0.0009 + 0.0006 * lum, t: blue ? range(er, 0.5, 0.62) : range(er, 0.22, 0.34), a: (0.3 + 0.6 * lum) * vis })
+    sprites.push({ x, y, r: 0.0009 + 0.0006 * lum, t: blue ? range(er, ES.gcBlue[0], ES.gcBlue[1]) : range(er, ES.gcRed[0], ES.gcRed[1]), a: (0.3 + 0.6 * lum) * vis * ES.gcK })
   }
 
   // --- the brightest red giants of the halo, resolved where the light thins out
@@ -630,15 +667,19 @@ function drawElliptical(L: Light, G: Galaxy, gi: number, hash: string, pal: Pale
     const a = er() * Math.PI * 2
     const [x, y] = place(rr * Math.cos(a), rr * Math.sin(a) * q)
     const lum = er() ** 3
-    sprites.push({ x, y, r: 0.0004 + 0.0005 * lum, t: range(er, 0.1, 0.35), a: 0.12 + 0.4 * lum })
+    sprites.push({ x, y, r: 0.0004 + 0.0005 * lum, t: range(er, ES.giants[0], ES.giants[1]), a: 0.12 + 0.4 * lum })
   }
 
   // --- a warped dust lane across the core (Centaurus A), or a jet (M87)
   const style = giant ? er() : 1
   if (style < 0.32)
-    drawLane(L, G, P, er, re, pal, sprites)
+    drawLane(L, G, P, er, re, pal, sprites, 1)
   else if (style < 0.5)
     drawJet(L, G, P, er, re, lut, sprites)
+  // in the infrared, a giant without a lane still shows the warm dust disc
+  // around its nucleus, glowing rather than absorbing
+  if (giant && style >= 0.32 && pal.dustGlow)
+    drawLane(L, G, P, stream(hash, `nuclear-dust${gi}`), re, pal, sprites, 0.45)
 }
 
 /**
@@ -647,8 +688,8 @@ function drawElliptical(L: Light, G: Galaxy, gi: number, hash: string, pal: Pale
  * into strands. The half of the disc in front of the galaxy hides most of the
  * light behind it, the far half only the light in front.
  */
-function drawLane(L: Light, G: Galaxy, P: Proj, er: Rng, re: number, pal: Palette, sprites: Sprite[]) {
-  const aMax = re * range(er, 1.5, 2.4)
+function drawLane(L: Light, G: Galaxy, P: Proj, er: Rng, re: number, pal: Palette, sprites: Sprite[], scale: number) {
+  const aMax = re * range(er, 1.5, 2.4) * scale
   const i0 = range(er, 1.05, 1.38)
   const wi = range(er, -0.3, 0.3)
   const p0 = G.pa + Math.PI / 2 + range(er, -0.7, 0.7)
@@ -695,7 +736,7 @@ function drawLane(L: Light, G: Galaxy, P: Proj, er: Rng, re: number, pal: Palett
     const p = (Y | 0) * w + (X | 0)
     LT[p] += t
     if (glow) {
-      const e = t * 0.5
+      const e = t * pal.ell.laneGlow
       L.r[p] += glow[0] * e
       L.g[p] += glow[1] * e
       L.b[p] += glow[2] * e
@@ -703,7 +744,7 @@ function drawLane(L: Light, G: Galaxy, P: Proj, er: Rng, re: number, pal: Palett
   }
   // young clusters and H II knots along the outer rim of the lane
   const hii = hexRGB(pal.hii)
-  const nk = int(er, 14, 30)
+  const nk = Math.round(int(er, 14, 30) * scale)
   for (let k = 0; k < nk; k++) {
     lane(aMax * range(er, 0.45, 0.95), er() * Math.PI * 2, pt)
     if (pt[2] < 0 && er() < 0.7)
@@ -730,22 +771,36 @@ function drawLane(L: Light, G: Galaxy, P: Proj, er: Rng, re: number, pal: Palett
  */
 function drawJet(L: Light, G: Galaxy, P: Proj, er: Rng, re: number, lut: Lut, sprites: Sprite[]) {
   const ang = er() * Math.PI * 2
-  const len = re * range(er, 0.75, 1.2)
+  const len = re * range(er, 1.1, 1.6)
   const dx = Math.cos(ang)
   const dy = Math.sin(ang)
   const [cr, cg, cb] = lutAt(lut, 0.97)
   const nk = int(er, 6, 10)
   const peak = range(er, 0.55, 0.85)
-  for (let k = 1; k <= nk; k++) {
-    const s = (k / nk) ** 0.85
-    const d = s * len
-    const bright = 0.35 + 0.65 * Math.exp(-((s - peak) ** 2) / 0.04)
-    const X = P.cx + P.sc * d * dx
-    const Y = P.cy + P.sc * d * dy
-    const sz = Math.max(0.6, 0.006 * P.sc)
-    ellipseBlob(L, X, Y, sz * 1.8, sz * 0.7, ang, cr * bright * 0.5, cg * bright * 0.5, cb * bright * 0.5)
-    sprites.push({ x: G.cx + G.size * d * dx, y: G.cy + G.size * d * dy, r: 0.0006 + 0.0008 * bright, t: 0.97, a: 0.35 + 0.5 * bright })
+  const at = (d: number, off = 0): [number, number] => [d * dx - off * dy, d * dy + off * dx]
+  const sz = Math.max(0.7, 0.007 * P.sc)
+  // the continuous channel: a thin, faint line at full resolution
+  const nl = 36
+  for (let k = 1; k <= nl; k++) {
+    const d = k / nl * len
+    const [x, y] = at(d)
+    sprites.push({ x: G.cx + G.size * x, y: G.cy + G.size * y, r: 0.0007, t: 0.97, a: 0.32 * (1 - 0.5 * k / nl) })
   }
+  ellipseBlob(L, P.cx + P.sc * len * 0.5 * dx, P.cy + P.sc * len * 0.5 * dy, P.sc * len * 0.45, sz * 0.6, ang, cr * 0.18, cg * 0.18, cb * 0.18)
+  // knots of shocked plasma, irregularly spaced, the brightest past the middle
+  for (let k = 1; k <= nk; k++) {
+    const s = Math.min(1, ((k - 0.5 + range(er, -0.3, 0.3)) / nk) ** 0.85)
+    const d = s * len
+    const bright = 0.4 + 0.6 * Math.exp(-((s - peak) ** 2) / 0.03)
+    const [x, y] = at(d, gaussian(er) * len * 0.012 * s)
+    ellipseBlob(L, P.cx + P.sc * x, P.cy + P.sc * y, sz * 2, sz * 0.8, ang, cr * bright * 0.8, cg * bright * 0.8, cb * bright * 0.8)
+    sprites.push({ x: G.cx + G.size * x, y: G.cy + G.size * y, r: 0.001 + 0.0016 * bright, t: 0.97, a: 0.5 + 0.45 * bright })
+  }
+  // the hotspot where the jet is stopped, and the start of a lobe around it
+  const [hx, hy] = at(len * 1.04)
+  ellipseBlob(L, P.cx + P.sc * hx, P.cy + P.sc * hy, sz * 3, sz * 2, ang, cr * 0.9, cg * 0.9, cb * 0.9)
+  ellipseBlob(L, P.cx + P.sc * hx, P.cy + P.sc * hy, sz * 7, sz * 9, ang, cr * 0.12, cg * 0.12, cb * 0.12)
+  sprites.push({ x: G.cx + G.size * hx, y: G.cy + G.size * hy, r: 0.0026, t: 0.97, a: 0.85 })
 }
 
 /**

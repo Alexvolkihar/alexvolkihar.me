@@ -207,7 +207,7 @@ export function develop(L: Light, d: Develop): Uint8ClampedArray {
     for (let i = 0; i < n; i++)
       raw[i] = raw[i] * sharp + small[i] * glow
     downsample(raw, half, w, h, w2, h2)
-    boxBlur(half, mid[c], tmp2, w2, h2, Math.max(1, L.s * 0.0035), 2)
+    boxBlur(half, mid[c], tmp2, w2, h2, Math.max(1, L.s * 0.005), 2)
     boxBlur(mid[c], big[c], tmp2, w2, h2, L.s * 0.013, 2)
   }
   // pass 2 (half resolution): how much of the detail to keep, and the soft part
